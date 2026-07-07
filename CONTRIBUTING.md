@@ -12,7 +12,7 @@ PRs are welcome. Keep changes focused and consistent with the existing code styl
 
 ## Development Tools
 
-Parts of this project were developed with AI-assisted tooling (Claude, by Anthropic).
+This project was developed with AI-assisted tooling (Claude, by Anthropic).
 
 ## License
 
