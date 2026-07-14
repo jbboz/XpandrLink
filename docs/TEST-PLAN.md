@@ -168,7 +168,7 @@ this session's coverage.
   ```
 - [x] Confirm Undo restores patch A exactly (not a partially-morphed state).
 
-## Session D — DAW / CC automation (standalone + AU/VST3)
+## Session D — DAW / CC automation (standalone + AU/VST3) — ✅ PASSED
 
 ### TASK-09 — CC automation table
 
@@ -204,7 +204,7 @@ never been done: actually loading the built VST3 inside a Windows DAW.
   ```
 - [ ] Confirm `%APPDATA%\XpandrLink\` is the settings/library path used in this context.
 
-## Session F — G1/G2/G9 hardware validation (parity gaps; partly unvalidated)
+## Session F — G1/G2/G9 hardware validation (parity gaps) — ✅ PASSED
 
 Newest work, not yet touched by real hardware. **G2 is the highest-stakes item in this whole
 document — it writes permanent, non-volatile patch memory with no undo.** Run G9 first (it's
@@ -228,8 +228,9 @@ between them and a wrong byte on one model but not the other would otherwise go 
 - [x] **Expected:** the synth's front-panel VFD shows the text, uppercased, correctly spaced —
   not garbled, truncated wrong, or shifted.
 - [x] Confirm text longer than 80 characters truncates cleanly (no wraparound garbage).
-- [ ] Send the OFF control and confirm the display returns to its normal patch-name view (not
-  blank/stuck).
+- [x] ~~Send the OFF control~~ — confirmed unnecessary: there is no dedicated OFF/blank state
+  to test on real hardware; switching functions on the synth resets the display back to normal
+  as expected on its own.
 - [x] Send the ON control (redisplay) and confirm it re-shows correctly.
 - [x] Repeat against the other synth model (Xpander cmd `0x05` vs Matrix-12 cmd `0x06`) if
   available — a wrong command byte would only show up on one of the two models.
