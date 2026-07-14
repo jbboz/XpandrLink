@@ -158,6 +158,20 @@ public:
     void sendMidiMute();   // Master -> MIDI -> Mute  (page-select 0B 1B 00)
     void sendTuneAll();    // Master -> Tune -> All   (MIDI Tune Request F6 = "tune all")
 
+    // Write text to the synth's own front-panel display. Text is uppercased and
+    // truncated/space-padded to exactly 80 chars (the hardware's fixed message length).
+    // Always sends OFF -> ON -> text (matches the C# reference's SendGreetingsToSynth /
+    // SendTypeWriterMessageToSynth). typewriter=true sends growing left-substrings of
+    // the text (each still padded to 80 chars) at kDisplayScrollMs apart, for a
+    // scrolling effect; typewriter=false sends the full text once.
+    // Command byte depends on setSynthTypeIsMatrix12() (0x05 Xpander / 0x06 Matrix-12).
+    void sendDisplayMessage(const juce::String& text, bool typewriter = false);
+
+    // Turn the synth's display off/on without changing its text. Exposed separately
+    // for a future greeting-on-connect; sendDisplayMessage() already calls both.
+    void sendDisplayOff();
+    void sendDisplayOn();
+
     int getSysexID() const { return sysexID; }
     juce::String getCurrentMidiInputName() const;
     juce::String getCurrentMidiOutputName() const;

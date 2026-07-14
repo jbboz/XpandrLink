@@ -352,6 +352,52 @@ void MidiEngine::sendTuneAll()
         activeOutput->sendMessageNow(juce::MidiMessage(0xF6));
 }
 
+void MidiEngine::sendDisplayOff()
+{
+    uint8_t cmd = synthTypeIsMatrix12 ? 0x06 : 0x05;
+    enqueueMessage({0xF0, 0x10, (uint8_t)sysexID, cmd, 0x00, 0xF7}, Oberheim::kDisplaySettleMs);
+}
+
+void MidiEngine::sendDisplayOn()
+{
+    uint8_t cmd = synthTypeIsMatrix12 ? 0x06 : 0x05;
+    enqueueMessage({0xF0, 0x10, (uint8_t)sysexID, cmd, 0x02, 0xF7}, Oberheim::kDisplaySettleMs);
+}
+
+void MidiEngine::sendDisplayMessage(const juce::String& text, bool typewriter)
+{
+    // F0 10 [id] [cmd] 01 <80 bytes, uppercased + space-padded> F7 (86 bytes total).
+    // Command byte and payload length verified against XpanderController.cs
+    // SendDisplayMessageToSynth / DISPLAY_INTRO_LENGTH+MAX_DISPLAY_MESSAGE_LENGTH+1.
+    auto buildTextMessage = [this](const juce::String& body) {
+        uint8_t cmd = synthTypeIsMatrix12 ? 0x06 : 0x05;
+        juce::String padded = body.toUpperCase().substring(0, 80).paddedRight(' ', 80);
+        std::vector<uint8_t> msg;
+        msg.reserve(86);
+        msg.push_back(0xF0); msg.push_back(0x10); msg.push_back((uint8_t)sysexID);
+        msg.push_back(cmd);  msg.push_back(0x01);
+        for (int i = 0; i < 80; ++i)
+            msg.push_back((uint8_t)padded[i]);
+        msg.push_back(0xF7);
+        return msg;
+    };
+
+    sendDisplayOff();
+    sendDisplayOn();
+
+    if (!typewriter)
+    {
+        enqueueMessage(buildTextMessage(text), Oberheim::kDisplaySettleMs);
+        return;
+    }
+
+    // Typewriter: send growing left-substrings of the (already uppercased) text,
+    // each still padded to the full 80 chars, kDisplayScrollMs apart.
+    juce::String upper = text.toUpperCase().substring(0, 80);
+    for (int i = 0; i <= upper.length(); ++i)
+        enqueueMessage(buildTextMessage(upper.substring(0, i)), Oberheim::kDisplayScrollMs);
+}
+
 // page + subPage for each EnumModulationDestinations (0-46).
 // Derived from XpanderConstants.PageSubPageForModulationDestination in C# reference.
 struct ModDest { uint8_t page, subPage; };

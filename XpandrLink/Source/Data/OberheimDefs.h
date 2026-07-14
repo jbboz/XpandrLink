@@ -16,6 +16,8 @@ namespace Oberheim
     constexpr int kSliderPageSettleMs = 100;  // page-select → slider/knob parameter
     constexpr int kModCmdGapMs        =  50;  // between mod-matrix sub-commands
     constexpr int kPatchSendSettleMs  = 100;  // patch-dump SysEx → program-change
+    constexpr int kDisplaySettleMs    = 100;  // display OFF -> ON -> text message
+    constexpr int kDisplayScrollMs    =  50;  // typewriter: delay between growing substrings
 
     // Dedicated "scratchpad" program slot used when pushing a library/editor-loaded
     // patch to hardware. Loads target this single slot instead of the patch's own
