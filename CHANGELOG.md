@@ -27,6 +27,14 @@ to JUCE — extended well beyond the original's scope.
   restores with the DAW project.
 - **MIDI conveniences** — CC-to-parameter automation table (standalone),
   multi-input with gated MIDI thru, auto-detection of the synth port and its
-  SysEx device ID.
+  SysEx device ID, a hardware display banner (send text to the synth's own
+  front-panel VFD), and store-to-hardware-slot for permanently committing a
+  patch (with a two-stage confirm dialog, since it's the one path that
+  writes non-volatile hardware memory).
+- **Mod-matrix stability** — front-panel routing edits (add/change source/
+  change amount/quantize/delete) are decoded directly from the hardware's
+  own edit SysEx and mirrored live in both matrix views, instead of
+  re-requesting a patch dump (which never reflected those edits). Fast
+  amount-knob drags are coalesced so they can't flood the synth's MIDI IN.
 
 See [FEATURES.md](FEATURES.md) for the complete inventory.

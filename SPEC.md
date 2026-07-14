@@ -49,7 +49,8 @@ AU is gated `if(APPLE)` in `CMakeLists.txt` and excluded from the Windows format
 - Multi-select removal.
 - Audition prev/next (◀ ▶ or arrow keys; 150 ms debounce).
 - ~~Send Bank~~ — removed 2026-07-06 (sent the whole library, not a sequenced set of
-  intended slots as advertised); see ROADMAP.md P0 (TASK-08) for redesign notes.
+  intended slots as advertised); dropped from the roadmap entirely 2026-07-14, no
+  redesign planned — see ROADMAP.md P3 (Out of Scope).
 
 ### Randomizer (RND pane)
 - **Nudge** — ±8 % perturbation of continuous params only.

@@ -44,8 +44,11 @@ invariants) see [SPEC.md](SPEC.md); for end-user workflows see the
 - Search, favorites filter, sort by name / date / description, multi-select removal,
   rename (updates the name embedded in the SysEx), Save As from the editor.
 - ~~Send Bank~~ — removed (2026-07-06): sent the entire library rather than a sequenced
-  set of intended slots. See [ROADMAP.md](ROADMAP.md) P0 table (TASK-08) for the redesign
-  needed before this ships again.
+  set of intended slots. Dropped from the roadmap entirely — see
+  [ROADMAP.md](ROADMAP.md) P3 (Out of Scope); no redesign planned.
+- **Store to hardware slot** — permanently commit the current patch to any real program
+  slot (0–98), behind a two-stage confirm dialog. The one deliberate exception to the
+  scratchpad-99 safety net below — writes non-volatile hardware memory with no undo.
 
 ## Hardware Patch Safety
 
@@ -84,6 +87,9 @@ invariants) see [SPEC.md](SPEC.md); for end-user workflows see the
   to the synth, gated so the synth's own port is never echoed back (no feedback lockups).
 - **Auto-detection**: the first port that sends Oberheim SysEx becomes the synth input, and
   the hardware's device ID is auto-learned so outgoing SysEx is never silently ignored.
+- **Hardware display banner**: send up to 80 characters of text to the synth's own
+  front-panel VFD (optional typewriter scroll), gated by a manual Xpander/Matrix-12
+  toggle since the two models use different command bytes for it.
 - Correct vintage-CPU pacing throughout: 150 ms button-page settle, 100 ms slider-page
   settle, 50 ms mod-command gaps, queued sends.
 
