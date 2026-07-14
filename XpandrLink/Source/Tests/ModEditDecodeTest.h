@@ -2,7 +2,7 @@
   ModEditDecodeTest.h
   Unit tests for decoding hardware front-panel modulation-matrix edits (cmd=0x0F).
 
-  Root cause (session 60): a "Get Patch" dump request does NOT reflect front-panel
+  Root cause: a "Get Patch" dump request does NOT reflect front-panel
   mod-matrix edits on real hardware -- confirmed via live capture showing the same
   stale mod-matrix bytes returned after repeated dump requests despite a live
   routing add. The correct approach (matching the C# reference,

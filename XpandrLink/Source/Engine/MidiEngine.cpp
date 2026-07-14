@@ -799,8 +799,8 @@ void MidiEngine::handlePatchDump(const uint8_t* data, int len, juce::String& log
 // patch redump; now it would cause an actual double-apply of an incremental edit (e.g.
 // our own DIAL +1 re-applied on top of the optimistic update we already made locally).
 //
-// Root-caused session 60 (see CLAUDE-MEMORY.md): a "Get Patch" dump request does NOT
-// reflect front-panel mod-matrix edits on real hardware -- live capture proved the dump
+// Root cause: a "Get Patch" dump request does NOT reflect front-panel mod-matrix
+// edits on real hardware -- live capture proved the dump
 // always returns stale mod-matrix bytes no matter how long you wait after an edit. So
 // this decodes the edit message directly instead of requesting a resync dump, matching
 // the C# reference's HandleModulationEditFromSynth (XpanderController.MIDIEvents.cs).
@@ -1192,10 +1192,9 @@ void MidiEngine::handleIncomingMidiMessage(juce::MidiInput* source, const juce::
         return;
     }
 
-    // Temporary diagnostic (session 60 investigation): the hidden logEditor has no
-    // visible surface anymore (session 51 replaced it with the MIDI pane), so route
-    // every logged RX line to the debug console too. Remove once the mod-routing
-    // "editor doesn't see it" bug is root-caused.
+    // Temporary diagnostic: the hidden logEditor has no visible surface anymore
+    // (an earlier UI change replaced it with the MIDI pane), so route every logged
+    // RX line to the debug console too.
     DBG(logMsg);
 
     {

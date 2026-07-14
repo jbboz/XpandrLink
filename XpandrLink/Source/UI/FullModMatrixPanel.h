@@ -44,7 +44,7 @@ public:
     void removeEntry(int srcIdx, int destIdx);
     void updateFromPatch(const std::vector<int>& patchData);
 
-    // Slot-keyed API (session 60): hardware front-panel mod-matrix edits (cmd=0x0F)
+    // Slot-keyed API: hardware front-panel mod-matrix edits (cmd=0x0F)
     // address an existing entry by (destIdx, idSource) alone -- mirrors the identical
     // API on ModSummaryPanel; see its header comment for the rationale.
     struct SlotEntry { int srcIdx = -1; int amount = 0; bool quantize = false; };

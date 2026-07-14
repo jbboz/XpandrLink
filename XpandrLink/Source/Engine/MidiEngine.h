@@ -61,7 +61,7 @@ public:
         // edit (cmd=0x0F), already decoded. The listener applies it incrementally to its
         // own mod-matrix model on the message thread. Does NOT imply a patch dump is
         // needed -- a "Get Patch" dump does not reflect live front-panel mod-matrix edits
-        // on real hardware (root-caused session 60; see CLAUDE-MEMORY.md).
+        // on real hardware.
         virtual void onModulationEditFromHardware(const MidiEngine::ModEdit& /*edit*/) {}
         // Called (on message thread) after sendPatchToSynth() actually delivers the cached
         // patch to hardware. programNumber is the real destination slot (always the
@@ -112,8 +112,8 @@ public:
     int  getCurrentProgram() const { return currentProgram; }
 
     // Manual synth-model flag (Xpander vs Matrix-12). Cannot be auto-detected: both
-    // models transmit the same SysEx device-ID byte (see [id] byte in CLAUDE-MEMORY.md,
-    // sessions 51/53), so this is a user-set switch, not learned from incoming SysEx.
+    // models transmit the same SysEx device-ID byte (see SPEC.md), so this is a
+    // user-set switch, not learned from incoming SysEx.
     // Selects the model-dependent command byte needed by features like the display
     // banner (G1) and the all-data-dump request (G3).
     void setSynthTypeIsMatrix12(bool isMatrix12) { synthTypeIsMatrix12 = isMatrix12; }

@@ -48,7 +48,7 @@ public:
     void removeEntry(int srcIdx, int destIdx);
     void updateFromPatch(const std::vector<int>& patchData);
 
-    // Slot-keyed API (session 60): hardware front-panel mod-matrix edits (cmd=0x0F)
+    // Slot-keyed API: hardware front-panel mod-matrix edits (cmd=0x0F)
     // address an existing entry by (destIdx, idSource) alone -- several of the
     // commands (amount dial, sign, quantize, delete) don't carry the source id at
     // all, only the destination (from page/subpage context) and the hardware slot.

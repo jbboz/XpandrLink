@@ -1,6 +1,6 @@
 /*
   FullModMatrixSlotTest.h
-  Slot-keyed API tests for FullModMatrixPanel (session 60), mirroring
+  Slot-keyed API tests for FullModMatrixPanel , mirroring
   IDSourceTrackingTest.h's ModSummaryPanel coverage. Hardware front-panel mod
   edits (cmd=0x0F) address an entry by (destIdx, idSource) alone -- the existing
   srcIdx+destIdx-keyed methods (updateEntrySource, removeEntry, etc.) can't look

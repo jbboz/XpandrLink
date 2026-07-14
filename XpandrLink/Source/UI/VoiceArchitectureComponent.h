@@ -115,7 +115,7 @@ public:
         if (modSummary) modSummary->decrementIdSourceAfterRemove(destIdx, removedIdSource);
     }
 
-    // Slot-keyed API (session 60) -- see ModSummaryPanel::SlotEntry for rationale.
+    // Slot-keyed API -- see ModSummaryPanel::SlotEntry for rationale.
     bool getEntryAtSlot(int destIdx, int idSource, ModSummaryPanel::SlotEntry& out) const
     {
         return modSummary ? modSummary->getEntryAtSlot(destIdx, idSource, out) : false;

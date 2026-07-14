@@ -59,7 +59,7 @@ public:
 
         beginTest("Embedded init patch's empty mod-matrix slots use the hardware NONE sentinel, not zero");
         {
-            // Root cause (session 61): the Xpander/Matrix-12 hardware only treats a
+            // Root cause: the Xpander/Matrix-12 hardware only treats a
             // mod-matrix slot as *unused* when source==0x1F and dest==0x3F -- confirmed
             // against the C# reference's own serializer (XpanderTone.cs ~845-849, which
             // explicitly substitutes UNUSED_ENTRY_SOURCE_VALUE/UNUSED_ENTRY_DEST_VALUE for

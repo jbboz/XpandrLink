@@ -154,7 +154,7 @@ public:
         }
 
         // -----------------------------------------------------------------------
-        // Slot-keyed API (session 60): hardware front-panel mod edits address an
+        // Slot-keyed API: hardware front-panel mod edits address an
         // entry by (destIdx, idSource) alone -- e.g. DIALVALUEAMOUNTOFCHANGE only
         // gives a slot number and destination, not which source occupies that slot.
         // The existing srcIdx+destIdx-keyed methods above can't look that up.

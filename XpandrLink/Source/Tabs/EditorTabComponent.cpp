@@ -257,8 +257,8 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
         // Any OTHER entries left behind at oldDstIdx with a higher slot number get
         // renumbered by the hardware after this delete -- our client-side bookkeeping
         // for those entries must follow, or a future edit to one of them will send
-        // SETSIGN/SETUNSIGNEDVALUE/DELETESOURCE to the wrong slot (real hardware-lockup
-        // bug, found 2026-07-12 -- see CLAUDE-MEMORY.md). Mirrors removeModCb below.
+        // SETSIGN/SETUNSIGNEDVALUE/DELETESOURCE to the wrong slot (a real hardware-lockup
+        // bug found and fixed 2026-07-12). Mirrors removeModCb below.
         if (idSource >= 0)
         {
             voiceArch->decrementIdSourceAfterRemove(oldDstIdx, idSource);
@@ -277,7 +277,7 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
     // atomic CHANGESOURCE command (cmd=0x02) -- never delete+re-add. Delete+re-add
     // requires predicting which hardware slot the re-add will auto-append to, which
     // silently corrupts a DIFFERENT entry's sign/amount when the prediction is wrong
-    // (real hardware-lockup bug, found 2026-07-12 -- see CLAUDE-MEMORY.md). CHANGESOURCE
+    // (a real hardware-lockup bug found and fixed 2026-07-12). CHANGESOURCE
     // keeps the entry's idSource untouched, so there is nothing to mispredict.
     // Source change FROM fullModMatrix: modSummary still has oldSrcIdx → remove+add locally.
     fullModMatrix->onSourceChanged = [this](int oldSrcIdx, int newSrcIdx, int destIdx, int amount, int idSource) {
@@ -645,8 +645,8 @@ void EditorTabComponent::onModulationEditFromHardware(const MidiEngine::ModEdit&
     // Called on the MIDI thread; marshal to the message thread before touching any UI
     // (matches onParameterChangedFromHardware/onPatchReceived). This applies the edit
     // directly to the local mod-matrix model instead of requesting a patch dump --
-    // root-caused session 60 (see CLAUDE-MEMORY.md): a "Get Patch" dump does not
-    // reflect front-panel mod-matrix edits on real hardware. This path must never call
+    // a "Get Patch" dump does not reflect front-panel mod-matrix edits on real
+    // hardware. This path must never call
     // back into MidiEngine's addModulation/removeModulation/changeModulationSource/
     // changeModulationAmount (that would send SysEx back to hardware and re-create the
     // send-side corruption/lockup bugs already fixed in this subsystem) -- it only
