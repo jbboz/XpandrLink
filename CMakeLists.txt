@@ -133,6 +133,7 @@ target_sources(XpandrLink_Tests PRIVATE
     XpandrLink/Source/Engine/MidiEngine.cpp
     XpandrLink/Source/Data/PatchLibrary.cpp
     XpandrLink/Source/UI/ModSummaryPanel.cpp
+    XpandrLink/Source/UI/FullModMatrixPanel.cpp
     XpandrLink/Source/UI/HardwareComponents.cpp
 )
 

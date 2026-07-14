@@ -2,9 +2,11 @@
 #include "BUG01_KnobColDecodeTest.h"
 #include "BUG05_ProgramChangeSysexTest.h"
 #include "ChangeModulationSourceTest.h"
+#include "FullModMatrixSlotTest.h"
 #include "IDSourceTrackingTest.h"
 #include "InitPatchLoadTest.h"
 #include "ModAmountCoalesceTest.h"
+#include "ModEditDecodeTest.h"
 #include "PatchRandomizerSafetyTest.h"
 
 int main()

@@ -152,6 +152,82 @@ public:
             panel.addEntry(19, 6, 32);
             expectEquals(panel.getIdSourceForEntry(19, 6), -1);
         }
+
+        // -----------------------------------------------------------------------
+        // Slot-keyed API (session 60): hardware front-panel mod edits address an
+        // entry by (destIdx, idSource) alone -- e.g. DIALVALUEAMOUNTOFCHANGE only
+        // gives a slot number and destination, not which source occupies that slot.
+        // The existing srcIdx+destIdx-keyed methods above can't look that up.
+        // -----------------------------------------------------------------------
+
+        beginTest("getEntryAtSlot finds the entry by (destIdx, idSource) alone");
+        {
+            ModSummaryPanel panel;
+            panel.addEntry(19, 6, 32, 0);   // LFO1 -> dest6, slot 0
+            panel.addEntry(20, 6, 40, 1);   // LFO2 -> dest6, slot 1
+
+            ModSummaryPanel::SlotEntry out;
+            expect(panel.getEntryAtSlot(6, 0, out), "expected slot 0 to be found");
+            expectEquals(out.srcIdx, 19);
+            expectEquals(out.amount, 32);
+            expect(panel.getEntryAtSlot(6, 1, out), "expected slot 1 to be found");
+            expectEquals(out.srcIdx, 20);
+        }
+
+        beginTest("getEntryAtSlot returns false for an empty slot");
+        {
+            ModSummaryPanel panel;
+            panel.addEntry(19, 6, 32, 0);
+            ModSummaryPanel::SlotEntry out;
+            expect(!panel.getEntryAtSlot(6, 3, out), "slot 3 should be empty");
+            expect(!panel.getEntryAtSlot(9, 0, out), "dest 9 has no entries");
+        }
+
+        beginTest("setSourceAtSlot changes the source in place, keeps the slot");
+        {
+            ModSummaryPanel panel;
+            panel.addEntry(19, 6, 32, 0);
+            panel.setSourceAtSlot(6, 0, 20);   // matches a hardware CHANGESOURCE
+            ModSummaryPanel::SlotEntry out;
+            expect(panel.getEntryAtSlot(6, 0, out), "slot 0 should still exist");
+            expectEquals(out.srcIdx, 20);
+            expectEquals(panel.getIdSourceForEntry(20, 6), 0);
+        }
+
+        beginTest("setAmountAtSlot changes the amount, e.g. DIALVALUEAMOUNTOFCHANGE +1");
+        {
+            ModSummaryPanel panel;
+            panel.addEntry(19, 6, 10, 0);
+            panel.setAmountAtSlot(6, 0, 11);
+            ModSummaryPanel::SlotEntry out;
+            expect(panel.getEntryAtSlot(6, 0, out), "slot 0 should still exist");
+            expectEquals(out.amount, 11);
+        }
+
+        beginTest("setQuantizeAtSlot toggles quantize on the right slot");
+        {
+            ModSummaryPanel panel;
+            panel.addEntry(19, 6, 10, 0);
+            ModSummaryPanel::SlotEntry before;
+            panel.getEntryAtSlot(6, 0, before);
+            expect(!before.quantize, "quantize should start false");
+            panel.setQuantizeAtSlot(6, 0, true);
+            ModSummaryPanel::SlotEntry after;
+            panel.getEntryAtSlot(6, 0, after);
+            expect(after.quantize, "expected quantize to be set true");
+        }
+
+        beginTest("removeAtSlot removes only the targeted slot");
+        {
+            ModSummaryPanel panel;
+            panel.addEntry(19, 6, 32, 0);
+            panel.addEntry(20, 6, 40, 1);
+            panel.removeAtSlot(6, 0);
+            ModSummaryPanel::SlotEntry out;
+            expect(!panel.getEntryAtSlot(6, 0, out), "slot 0 should be gone");
+            expect(panel.getEntryAtSlot(6, 1, out), "slot 1 should be untouched");
+            expectEquals(out.srcIdx, 20);
+        }
     }
 };
 

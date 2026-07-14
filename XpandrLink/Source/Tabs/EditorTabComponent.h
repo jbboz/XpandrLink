@@ -38,7 +38,7 @@ public:
     void onMidiOutputChanged(const juce::String& name) override;
     void onSynthInputDetected(const juce::String& portName) override;
     void onSysexIDDetected(int id) override;
-    void onModulationRoutingChangedByHardware() override;
+    void onModulationEditFromHardware(const MidiEngine::ModEdit& edit) override;
     void onPatchSentToSynth(int programNumber) override;
 
     std::vector<uint8_t> buildCurrentPatchSysex() const;
@@ -120,10 +120,6 @@ private:
 
     // Pre-built per-page param lookup — replaces O(350) linear scan in onParameterChangedFromHardware.
     std::unordered_map<int, std::vector<const XpanderParam*>> paramsByPage_;
-
-    // Debounce counter for hardware mod-routing dump requests.
-    // Incremented on each MIDI-thread notification; only the final pending dump fires.
-    std::atomic<int> modDumpGeneration_ { 0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EditorTabComponent)
 };

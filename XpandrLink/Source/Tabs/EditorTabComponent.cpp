@@ -640,19 +640,121 @@ void EditorTabComponent::onPatchSentToSynth(int programNumber)
     });
 }
 
-void EditorTabComponent::onModulationRoutingChangedByHardware()
+void EditorTabComponent::onModulationEditFromHardware(const MidiEngine::ModEdit& edit)
 {
-    // Called on the MIDI thread. Increment generation first; the callAsync lambda captures the
-    // new value. Only the last pending callAfterDelay fires the dump — rapid hardware knob
-    // turns (many messages/sec) coalesce into one dump after 150ms of quiet.
-    int gen = ++modDumpGeneration_;
+    // Called on the MIDI thread; marshal to the message thread before touching any UI
+    // (matches onParameterChangedFromHardware/onPatchReceived). This applies the edit
+    // directly to the local mod-matrix model instead of requesting a patch dump --
+    // root-caused session 60 (see CLAUDE-MEMORY.md): a "Get Patch" dump does not
+    // reflect front-panel mod-matrix edits on real hardware. This path must never call
+    // back into MidiEngine's addModulation/removeModulation/changeModulationSource/
+    // changeModulationAmount (that would send SysEx back to hardware and re-create the
+    // send-side corruption/lockup bugs already fixed in this subsystem) -- it only
+    // updates the display to match what the hardware already did.
     juce::Component::SafePointer<EditorTabComponent> safeThis(this);
-    juce::MessageManager::callAsync([safeThis, gen] {
+    juce::MessageManager::callAsync([safeThis, edit] {
         if (safeThis == nullptr) return;
-        juce::Timer::callAfterDelay(150, [safeThis, gen] {
-            if (safeThis != nullptr && gen == safeThis->modDumpGeneration_.load())
-                safeThis->midiEngine.requestPatchDump(safeThis->midiEngine.getCurrentProgram());
-        });
+
+        safeThis->midiEngine.setHardwareUpdateMode(true);
+
+        using Cmd = MidiEngine::ModEditCommand;
+        auto& voiceArch     = *safeThis->voiceArch;
+        auto& fullModMatrix = *safeThis->fullModMatrix;
+        const int dest = edit.destIndex;
+        const int slot = edit.idSource;
+
+        switch (edit.command)
+        {
+            case Cmd::AddSource:
+            {
+                // Recompute the slot from local state rather than trusting the message's
+                // slot field, mirroring the C# reference's GetNextAvailableModEntry and
+                // reusing the exact same picker the editor's own add path already uses.
+                int newSlot = voiceArch.getNextIdSourceForDest(dest);
+                if (newSlot >= 0)
+                {
+                    voiceArch.addModulationEntry(edit.value, dest, 0, newSlot);
+                    fullModMatrix.addEntry(edit.value, dest, 0, newSlot);
+                    int paramID = ModAssignmentLogic::getParamIDForDestination(dest);
+                    if (paramID >= 0)
+                        safeThis->modAssignmentLogic.addOptimisticRoute(paramID);
+                }
+                break;
+            }
+            case Cmd::DeleteSource:
+            {
+                voiceArch.removeAtSlot(dest, slot);
+                fullModMatrix.removeAtSlot(dest, slot);
+                voiceArch.decrementIdSourceAfterRemove(dest, slot);
+                fullModMatrix.decrementIdSourceAfterRemove(dest, slot);
+                int paramID = ModAssignmentLogic::getParamIDForDestination(dest);
+                if (paramID >= 0)
+                    safeThis->modAssignmentLogic.removeRoute(paramID);
+                break;
+            }
+            case Cmd::ChangeSource:
+                voiceArch.setSourceAtSlot(dest, slot, edit.value);
+                fullModMatrix.setSourceAtSlot(dest, slot, edit.value);
+                break;
+            case Cmd::SetUnsignedValue:
+            {
+                ModSummaryPanel::SlotEntry e;
+                if (voiceArch.getEntryAtSlot(dest, slot, e))
+                {
+                    int newAmount = edit.value * (e.amount < 0 ? -1 : 1);
+                    voiceArch.setAmountAtSlot(dest, slot, newAmount);
+                    fullModMatrix.setAmountAtSlot(dest, slot, newAmount);
+                }
+                break;
+            }
+            case Cmd::DialValueAmountOfChange:
+            {
+                ModSummaryPanel::SlotEntry e;
+                if (voiceArch.getEntryAtSlot(dest, slot, e))
+                {
+                    int newAmount = juce::jlimit(-63, 63, e.amount + edit.value);
+                    voiceArch.setAmountAtSlot(dest, slot, newAmount);
+                    fullModMatrix.setAmountAtSlot(dest, slot, newAmount);
+                }
+                break;
+            }
+            case Cmd::SetQuantize:
+                voiceArch.setQuantizeAtSlot(dest, slot, edit.value != 0);
+                fullModMatrix.setQuantizeAtSlot(dest, slot, edit.value != 0);
+                break;
+            case Cmd::ToggleQuantize:
+            {
+                ModSummaryPanel::SlotEntry e;
+                if (voiceArch.getEntryAtSlot(dest, slot, e))
+                {
+                    voiceArch.setQuantizeAtSlot(dest, slot, !e.quantize);
+                    fullModMatrix.setQuantizeAtSlot(dest, slot, !e.quantize);
+                }
+                break;
+            }
+            case Cmd::SetSign:
+            {
+                ModSummaryPanel::SlotEntry e;
+                if (voiceArch.getEntryAtSlot(dest, slot, e))
+                {
+                    int desiredSign = (edit.value == 1) ? -1 : 1;
+                    int currentSign = e.amount < 0 ? -1 : 1;
+                    if (currentSign != desiredSign)
+                    {
+                        int newAmount = -e.amount;
+                        voiceArch.setAmountAtSlot(dest, slot, newAmount);
+                        fullModMatrix.setAmountAtSlot(dest, slot, newAmount);
+                    }
+                }
+                break;
+            }
+            case Cmd::Unknown:
+            default:
+                break;
+        }
+
+        safeThis->midiEngine.setHardwareUpdateMode(false);
+        if (auto* top = safeThis->getTopLevelComponent()) top->repaint();
     });
 }
 

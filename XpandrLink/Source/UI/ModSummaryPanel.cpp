@@ -79,6 +79,63 @@ void ModSummaryPanel::removeEntry(int srcIdx, int destIdx)
     repaint();
 }
 
+bool ModSummaryPanel::getEntryAtSlot(int destIdx, int idSource, SlotEntry& out) const
+{
+    for (const auto& e : activeMods)
+        if (e.destIdx == destIdx && e.idSource == idSource)
+        {
+            out.srcIdx   = e.srcIdx;
+            out.amount   = e.amount;
+            out.quantize = e.quantize;
+            return true;
+        }
+    return false;
+}
+
+void ModSummaryPanel::setSourceAtSlot(int destIdx, int idSource, int newSrcIdx)
+{
+    for (auto& e : activeMods)
+        if (e.destIdx == destIdx && e.idSource == idSource)
+        {
+            e.srcIdx     = newSrcIdx;
+            e.sourceName = (newSrcIdx < (int)ModSources.size()) ? ModSources[newSrcIdx]
+                                                                 : "Src:" + juce::String(newSrcIdx);
+            repaint();
+            return;
+        }
+}
+
+void ModSummaryPanel::setAmountAtSlot(int destIdx, int idSource, int newAmount)
+{
+    for (auto& e : activeMods)
+        if (e.destIdx == destIdx && e.idSource == idSource)
+        {
+            e.amount = newAmount;
+            repaint();
+            return;
+        }
+}
+
+void ModSummaryPanel::setQuantizeAtSlot(int destIdx, int idSource, bool quantize)
+{
+    for (auto& e : activeMods)
+        if (e.destIdx == destIdx && e.idSource == idSource)
+        {
+            e.quantize = quantize;
+            repaint();
+            return;
+        }
+}
+
+void ModSummaryPanel::removeAtSlot(int destIdx, int idSource)
+{
+    activeMods.erase(std::remove_if(activeMods.begin(), activeMods.end(),
+        [&](const ModEntry& e){ return e.destIdx == destIdx && e.idSource == idSource; }),
+        activeMods.end());
+    renumber();
+    repaint();
+}
+
 void ModSummaryPanel::updateFromPatch(const std::vector<int>& patchData)
 {
     activeMods.clear();

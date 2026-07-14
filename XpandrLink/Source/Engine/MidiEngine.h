@@ -10,6 +10,23 @@ class MidiEngine : public juce::MidiInputCallback,
                    public juce::ChangeListener,
                    private juce::Timer {
 public:
+    // Hardware front-panel mod-matrix edit commands (cmd=0x0F messages).
+    // Matches C# EnumModulationEditCommands (XpanderConstants.cs).
+    enum class ModEditCommand {
+        AddSource = 0, DeleteSource = 1, ChangeSource = 2, SetUnsignedValue = 3,
+        DialValueAmountOfChange = 4, SetQuantize = 5, ToggleQuantize = 6, SetSign = 7,
+        Unknown = 0xFF
+    };
+
+    // A decoded hardware mod-matrix edit. destIndex is resolved from the current
+    // page/subpage context (the message itself doesn't carry a destination).
+    struct ModEdit {
+        int           destIndex = -1;   // 0-46, resolved via destIndexForPageSubPage
+        int           idSource  = -1;   // hardware slot 0-5
+        ModEditCommand command  = ModEditCommand::Unknown;
+        int           value     = 0;    // sign-decoded value field
+    };
+
     class Listener {
     public:
         // Auto-removes from the engine if still registered — safe to destroy without calling removeListener().
@@ -40,9 +57,12 @@ public:
         // a device-ID byte different from our current sysexID. Auto-learns the hardware's
         // configured ID so outgoing SysEx isn't silently ignored by a mismatched device.
         virtual void onSysexIDDetected(int /*id*/) {}
-        // Called when the hardware sends any modulation-routing SysEx (cmd=0x0F).
-        // Listener should request a patch dump to refresh the mod matrix panel.
-        virtual void onModulationRoutingChangedByHardware() {}
+        // Called (on the MIDI thread) when the hardware reports a front-panel mod-matrix
+        // edit (cmd=0x0F), already decoded. The listener applies it incrementally to its
+        // own mod-matrix model on the message thread. Does NOT imply a patch dump is
+        // needed -- a "Get Patch" dump does not reflect live front-panel mod-matrix edits
+        // on real hardware (root-caused session 60; see CLAUDE-MEMORY.md).
+        virtual void onModulationEditFromHardware(const MidiEngine::ModEdit& /*edit*/) {}
         // Called (on message thread) after sendPatchToSynth() actually delivers the cached
         // patch to hardware. programNumber is the real destination slot (always the
         // scratchpad, Oberheim::kScratchpadProgram) — NOT necessarily the program number
@@ -212,6 +232,20 @@ public:
     // Public for unit testing: decode the Oberheim sign-magnitude 2-byte encoding.
     static int decodeSysexValue(uint8_t val_lo, uint8_t val_hi);
 
+    // Public for unit testing: reverse lookup of the page/subpage -> mod-destination
+    // table (kModDestTable in MidiEngine.cpp). Returns 0-46, or -1 if (page, subPage)
+    // isn't a known modulation destination.
+    static int destIndexForPageSubPage(int page, int subPage);
+
+    // Public for unit testing: decode a hardware front-panel mod-matrix edit SysEx
+    // (cmd=0x0F). `data`/`len` are the JUCE getSysExData()/getSysExDataSize() form
+    // (F0/F7 excluded). rxPage/rxSubPage are the caller's current page-select context
+    // (currentRxPage/currentRxSubPage), used to resolve the destination since it isn't
+    // carried in the message itself. Returns false if len is too short or the
+    // destination can't be resolved; `out` is left unmodified in that case.
+    static bool decodeModulationEditMessage(const uint8_t* data, int len,
+                                            int rxPage, int rxSubPage, ModEdit& out);
+
     // Public for unit testing: true if `now` is still within `throttleMs` of `lastSendTime`
     // (i.e. a mod-matrix amount change should be coalesced/deferred rather than sent
     // immediately). Wraparound-safe signed subtraction, same pattern as handleModRouting.
@@ -245,7 +279,7 @@ private:
     void handlePageSelect     (const uint8_t* data,               juce::String& logMsg);
     void handleParameterChange(const uint8_t* data, int len,      juce::String& logMsg);
     void handlePatchDump      (const uint8_t* data, int len,      juce::String& logMsg);
-    void handleModRouting     (                                    juce::String& logMsg);
+    void handleModRouting     (const uint8_t* data, int len,      juce::String& logMsg);
     void handleProgramNav     (const uint8_t* data,               juce::String& logMsg);
     void syncMidiInputCallbacks();
     void syncMidiOutputFromDeviceManager();

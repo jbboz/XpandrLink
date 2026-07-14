@@ -57,6 +57,45 @@ public:
             engine.removeListener(&listener);
         }
 
+        beginTest("Embedded init patch's empty mod-matrix slots use the hardware NONE sentinel, not zero");
+        {
+            // Root cause (session 61): the Xpander/Matrix-12 hardware only treats a
+            // mod-matrix slot as *unused* when source==0x1F and dest==0x3F -- confirmed
+            // against the C# reference's own serializer (XpanderTone.cs ~845-849, which
+            // explicitly substitutes UNUSED_ENTRY_SOURCE_VALUE/UNUSED_ENTRY_DEST_VALUE for
+            // any slot whose source is NONE before writing the patch out). A slot with
+            // source=0/dest=0/amount=0 is NOT recognized as empty by the hardware -- it
+            // reads as a real (silent) VCO1_FRQ<-ENV1 routing and still consumes one of
+            // the synth's 20 total mod-matrix slots. The embedded InitPatch.syx previously
+            // zero-filled its 18 unused slots instead of using the sentinel, so loading
+            // Init Patch left the hardware believing all 20 slots were occupied -- any
+            // further add (from the front panel or the editor) was rejected with
+            // "maximum of 20 modulations per voice" even though only 2 routings showed
+            // in the UI (our own decode already treats amount==0 as inactive for display,
+            // which is why the UI never showed the problem).
+            auto* b = reinterpret_cast<const uint8_t*>(BinaryData::InitPatch_syx);
+            const uint8_t* packed = b + 6;   // header: F0 10 id 01 00 progNum
+
+            auto unpack = [](uint8_t lo, uint8_t hi) -> uint8_t {
+                return (uint8_t)(((hi & 0x01) << 7) | (lo & 0x7F));
+            };
+
+            for (int slot = 0; slot < 20; ++slot)
+            {
+                int base = 128 + slot * 3;
+                uint8_t src = unpack(packed[2 * base],       packed[2 * base + 1]);
+                uint8_t amt = unpack(packed[2 * (base + 1)], packed[2 * (base + 1) + 1]);
+                uint8_t dst = unpack(packed[2 * (base + 2)], packed[2 * (base + 2) + 1]);
+
+                bool amountIsZero = (amt & 0x3F) == 0;
+                if (amountIsZero)
+                {
+                    expectEquals((int)src, 0x1F, "slot " + juce::String(slot) + " should use the NONE source sentinel");
+                    expectEquals((int)dst, 0x3F, "slot " + juce::String(slot) + " should use the NONE dest sentinel");
+                }
+            }
+        }
+
         beginTest("loadPatchFromMemory rejects a too-short buffer");
         {
             MidiEngine engine;

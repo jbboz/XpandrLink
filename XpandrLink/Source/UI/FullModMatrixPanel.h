@@ -44,6 +44,16 @@ public:
     void removeEntry(int srcIdx, int destIdx);
     void updateFromPatch(const std::vector<int>& patchData);
 
+    // Slot-keyed API (session 60): hardware front-panel mod-matrix edits (cmd=0x0F)
+    // address an existing entry by (destIdx, idSource) alone -- mirrors the identical
+    // API on ModSummaryPanel; see its header comment for the rationale.
+    struct SlotEntry { int srcIdx = -1; int amount = 0; bool quantize = false; };
+    bool getEntryAtSlot(int destIdx, int idSource, SlotEntry& out) const;
+    void setSourceAtSlot  (int destIdx, int idSource, int newSrcIdx);
+    void setAmountAtSlot  (int destIdx, int idSource, int newAmount);
+    void setQuantizeAtSlot(int destIdx, int idSource, bool quantize);
+    void removeAtSlot     (int destIdx, int idSource);
+
     void resized() override {} // all layout is handled in paint()
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent& e) override;

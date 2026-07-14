@@ -138,6 +138,71 @@ void FullModMatrixPanel::updateFromPatch(const std::vector<int>& patchData)
     repaint();
 }
 
+bool FullModMatrixPanel::getEntryAtSlot(int destIdx, int idSource, SlotEntry& out) const
+{
+    for (const auto& s : slots)
+        if (s.active && s.destIdx == destIdx && s.idSource == idSource)
+        {
+            out.srcIdx   = s.srcIdx;
+            out.amount   = s.amount;
+            out.quantize = s.quantize;
+            return true;
+        }
+    return false;
+}
+
+void FullModMatrixPanel::setSourceAtSlot(int destIdx, int idSource, int newSrcIdx)
+{
+    for (auto& s : slots)
+        if (s.active && s.destIdx == destIdx && s.idSource == idSource)
+        {
+            s.srcIdx  = newSrcIdx;
+            s.srcName = newSrcIdx < (int)ModSources.size()
+                      ? ModSources[newSrcIdx] : "Src:" + juce::String(newSrcIdx);
+            repaint();
+            return;
+        }
+}
+
+void FullModMatrixPanel::setAmountAtSlot(int destIdx, int idSource, int newAmount)
+{
+    for (auto& s : slots)
+        if (s.active && s.destIdx == destIdx && s.idSource == idSource)
+        {
+            s.amount = newAmount;
+            repaint();
+            return;
+        }
+}
+
+void FullModMatrixPanel::setQuantizeAtSlot(int destIdx, int idSource, bool quantize)
+{
+    for (auto& s : slots)
+        if (s.active && s.destIdx == destIdx && s.idSource == idSource)
+        {
+            s.quantize = quantize;
+            repaint();
+            return;
+        }
+}
+
+void FullModMatrixPanel::removeAtSlot(int destIdx, int idSource)
+{
+    for (auto& s : slots)
+        if (s.active && s.destIdx == destIdx && s.idSource == idSource)
+        {
+            s.active  = false;
+            s.srcIdx  = -1;
+            s.destIdx  = -1;
+            s.srcName = "";
+            s.dstName = "";
+            s.amount  = 0;
+            s.quantize = false;
+            repaint();
+            return;
+        }
+}
+
 void FullModMatrixPanel::getCurrentModBytes(std::array<uint8_t, 60>& out) const
 {
     out.fill(0);

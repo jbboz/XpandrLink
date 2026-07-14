@@ -105,6 +105,7 @@ void MidiEngine::addMidiInput(const juce::String& deviceName)
             dm.addMidiInputDeviceCallback(d.identifier, this);
             juce::String msg = "Connected Input: " + d.name;
             const juce::ScopedLock sl(listenerLock);
+            DBG(msg);
             for (auto* l : listeners) l->onStatusUpdate(msg);
             return;
         }
@@ -120,6 +121,7 @@ void MidiEngine::removeMidiInput(const juce::String& deviceName)
             dm.setMidiInputDeviceEnabled(d.identifier, false);
             juce::String msg = "Disconnected Input: " + d.name;
             const juce::ScopedLock sl(listenerLock);
+            DBG(msg);
             for (auto* l : listeners) l->onStatusUpdate(msg);
             return;
         }
@@ -435,12 +437,44 @@ static const ModDest kModDestTable[] = {
 };
 static const int kModDestCount = (int)(sizeof(kModDestTable) / sizeof(kModDestTable[0]));
 
+int MidiEngine::destIndexForPageSubPage(int page, int subPage)
+{
+    for (int i = 0; i < kModDestCount; ++i)
+        if (kModDestTable[i].page == page && kModDestTable[i].subPage == subPage)
+            return i;
+    return -1;
+}
+
+// Hardware front-panel mod-matrix edit message (cmd=0x0F), JUCE data[] (F0/F7 excluded):
+//   data[0]=0x10 data[1]=id data[2]=0x0F data[3]=0x00
+//   data[4]=idSource(slot 0-5) data[5]=0x00 data[6]=command data[7]=0x00
+//   data[8]=valueLo data[9]=valueHi
+// Destination is not carried in the message -- resolved from the caller's current
+// page/subpage context via destIndexForPageSubPage. Matches the C# reference's
+// IsModulationEditFollowsSysEx (XpanderController.MIDIEvents.cs).
+bool MidiEngine::decodeModulationEditMessage(const uint8_t* data, int len,
+                                             int rxPage, int rxSubPage, ModEdit& out)
+{
+    if (len < 10) return false;
+
+    int destIndex = destIndexForPageSubPage(rxPage, rxSubPage);
+    if (destIndex < 0) return false;
+
+    out.destIndex = destIndex;
+    out.idSource   = data[4];
+    out.command    = (data[6] <= (int)ModEditCommand::SetSign)
+                    ? (ModEditCommand)data[6] : ModEditCommand::Unknown;
+    out.value      = decodeSysexValue(data[8], data[9]);
+    return true;
+}
+
 void MidiEngine::addModulation(int sourceIndex, int destIndex, int amount, int idSourceForAmtAndSign) {
 
     if (sourceIndex < 0 || sourceIndex > 26 || destIndex < 0 || destIndex >= kModDestCount) {
         juce::String err = "MOD ASSIGN: invalid src=" + juce::String(sourceIndex)
                          + " dst=" + juce::String(destIndex);
         const juce::ScopedLock sl(listenerLock);
+        DBG(err);
         for (auto* l : listeners) l->onStatusUpdate(err);
         return;
     }
@@ -487,6 +521,7 @@ void MidiEngine::addModulation(int sourceIndex, int destIndex, int amount, int i
                      + " amt=" + juce::String(amount)
                      + " idSrc=" + juce::String((int)idSrc);
     const juce::ScopedLock sl(listenerLock);
+    DBG(msg);
     for (auto* l : listeners) l->onStatusUpdate(msg);
 }
 
@@ -514,6 +549,7 @@ void MidiEngine::removeModulation(int sourceIndex, int destIndex, int idSource) 
                      + " dst=" + juce::String(destIndex)
                      + " idSrc=" + juce::String((int)idSrc);
     const juce::ScopedLock sl(listenerLock);
+    DBG(msg);
     for (auto* l : listeners) l->onStatusUpdate(msg);
 }
 
@@ -555,6 +591,7 @@ void MidiEngine::sendModAmountNow(int destIndex, int idSource, int newAmount)
                      + " idSrc=" + juce::String(idSource)
                      + " amt=" + juce::String(newAmount);
     const juce::ScopedLock sl(listenerLock);
+    DBG(msg);
     for (auto* l : listeners) l->onStatusUpdate(msg);
 }
 
@@ -599,6 +636,7 @@ void MidiEngine::changeModulationSource(int destIndex, int idSource, int newSour
                       + " idSrc=" + juce::String(idSource)
                       + " newSrc=" + juce::String(newSourceIndex);
     const juce::ScopedLock sl(listenerLock);
+    DBG(msg2);
     for (auto* l : listeners) l->onStatusUpdate(msg2);
 }
 
@@ -755,10 +793,18 @@ void MidiEngine::handlePatchDump(const uint8_t* data, int len, juce::String& log
     }
 }
 
-// Modulation routing change from hardware (cmd=0x0F, any sub-command).
-// If we sent a mod command recently this is our own echo — suppress the dump to avoid
-// a feedback loop (send change → echo → dump → echo → ...).
-void MidiEngine::handleModRouting(juce::String& logMsg)
+// Modulation routing change from hardware (cmd=0x0F, front-panel mod-matrix edit).
+// If we sent a mod command recently this is our own echo -- suppress it. This matters
+// more than it used to: previously a spurious echo only triggered a wasteful (harmless)
+// patch redump; now it would cause an actual double-apply of an incremental edit (e.g.
+// our own DIAL +1 re-applied on top of the optimistic update we already made locally).
+//
+// Root-caused session 60 (see CLAUDE-MEMORY.md): a "Get Patch" dump request does NOT
+// reflect front-panel mod-matrix edits on real hardware -- live capture proved the dump
+// always returns stale mod-matrix bytes no matter how long you wait after an edit. So
+// this decodes the edit message directly instead of requesting a resync dump, matching
+// the C# reference's HandleModulationEditFromSynth (XpanderController.MIDIEvents.cs).
+void MidiEngine::handleModRouting(const uint8_t* data, int len, juce::String& logMsg)
 {
     logMsg += " [ModRouting]";
     auto elapsed = (juce::int32)(juce::Time::getMillisecondCounter() - lastModSentTime_);
@@ -766,8 +812,17 @@ void MidiEngine::handleModRouting(juce::String& logMsg)
         logMsg += " [echo-suppressed]";
         return;
     }
+
+    ModEdit edit;
+    if (!decodeModulationEditMessage(data, len, currentRxPage.load(), currentRxSubPage.load(), edit)) {
+        logMsg += " [undecodable — dest unknown or wrong length; dropped]";
+        return;
+    }
+    logMsg += juce::String::formatted(" dest=%d slot=%d cmd=%d val=%d",
+                                      edit.destIndex, edit.idSource, (int)edit.command, edit.value);
+
     const juce::ScopedLock sl(listenerLock);
-    for (auto* l : listeners) l->onModulationRoutingChangedByHardware();
+    for (auto* l : listeners) l->onModulationEditFromHardware(edit);
 }
 
 // Front-panel patch navigation (+/- buttons):
@@ -891,6 +946,7 @@ void MidiEngine::sendProgramChange(int programNumber)
         const juce::ScopedLock sl(listenerLock);
         for (auto* l : listeners) {
             l->onMidiActivity(false);
+            DBG(logMsg);
             l->onStatusUpdate(logMsg);
         }
     }
@@ -908,6 +964,7 @@ void MidiEngine::requestPatchDump(int programNumber)
     juce::String logMsg = "TX: PatchDumpRequest id=" + juce::String((int)sysexID)
                         + " prog=" + juce::String(programNumber);
     const juce::ScopedLock sl(listenerLock);
+    DBG(logMsg);
     for (auto* l : listeners) l->onStatusUpdate(logMsg);
 }
 
@@ -938,6 +995,7 @@ void MidiEngine::sendPatchToSynth()
     {
         const juce::ScopedLock sl(listenerLock);
         for (auto* l : listeners) {
+            DBG(logMsg);
             l->onStatusUpdate(logMsg);
             l->onPatchSentToSynth(progNum);
         }
@@ -992,6 +1050,7 @@ void MidiEngine::storePatchToSlot(int slot)
                         + " prog=" + juce::String(slot);
     {
         const juce::ScopedLock sl(listenerLock);
+        DBG(logMsg);
         for (auto* l : listeners) l->onStatusUpdate(logMsg);
     }
     enqueueMessage({0xF0, 0x10, (uint8_t)sysexID, 0x07, (uint8_t)slot, 0xF7},
@@ -1111,7 +1170,7 @@ void MidiEngine::handleIncomingMidiMessage(juce::MidiInput* source, const juce::
             if      (cmd == 0x0B && len >= 5)  handlePageSelect     (data,      logMsg);
             else if (cmd == 0x0A && len >= 10) handleParameterChange(data, len, logMsg);
             else if (cmd == 0x01)              handlePatchDump      (data, len, logMsg);
-            else if (cmd == 0x0F)              handleModRouting     (           logMsg);
+            else if (cmd == 0x0F)              handleModRouting     (data, len, logMsg);
             else if (cmd == 0x0E && len >= 4)  handleProgramNav     (data,      logMsg);
         }
     } else if (message.isProgramChange()) {
@@ -1132,6 +1191,12 @@ void MidiEngine::handleIncomingMidiMessage(juce::MidiInput* source, const juce::
         // Skip logging them to avoid flooding the message thread with callAsync work.
         return;
     }
+
+    // Temporary diagnostic (session 60 investigation): the hidden logEditor has no
+    // visible surface anymore (session 51 replaced it with the MIDI pane), so route
+    // every logged RX line to the debug console too. Remove once the mod-routing
+    // "editor doesn't see it" bug is root-caused.
+    DBG(logMsg);
 
     {
         const juce::ScopedLock sl(listenerLock);

@@ -115,6 +115,32 @@ public:
         if (modSummary) modSummary->decrementIdSourceAfterRemove(destIdx, removedIdSource);
     }
 
+    // Slot-keyed API (session 60) -- see ModSummaryPanel::SlotEntry for rationale.
+    bool getEntryAtSlot(int destIdx, int idSource, ModSummaryPanel::SlotEntry& out) const
+    {
+        return modSummary ? modSummary->getEntryAtSlot(destIdx, idSource, out) : false;
+    }
+
+    void setSourceAtSlot(int destIdx, int idSource, int newSrcIdx)
+    {
+        if (modSummary) modSummary->setSourceAtSlot(destIdx, idSource, newSrcIdx);
+    }
+
+    void setAmountAtSlot(int destIdx, int idSource, int newAmount)
+    {
+        if (modSummary) modSummary->setAmountAtSlot(destIdx, idSource, newAmount);
+    }
+
+    void setQuantizeAtSlot(int destIdx, int idSource, bool quantize)
+    {
+        if (modSummary) modSummary->setQuantizeAtSlot(destIdx, idSource, quantize);
+    }
+
+    void removeAtSlot(int destIdx, int idSource)
+    {
+        if (modSummary) modSummary->removeAtSlot(destIdx, idSource);
+    }
+
     void setOnRemoveModulation(std::function<void(int, int)> cb)
     {
         if (modSummary) modSummary->onRemoveRequested = cb;
