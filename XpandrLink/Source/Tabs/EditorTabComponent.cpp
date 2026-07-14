@@ -857,6 +857,10 @@ void EditorTabComponent::loadSettings()
         }
     }
 
+    // Restore manual synth-type flag (cannot be auto-detected — see MidiEngine.h).
+    if (appProperties->containsKey("SynthTypeIsMatrix12"))
+        midiEngine.setSynthTypeIsMatrix12(appProperties->getBoolValue("SynthTypeIsMatrix12"));
+
     // Restore auto-detected synth input (only if the port is still available).
     // If not available, synthInputName stays empty and will re-detect from the next
     // incoming Oberheim SysEx message.
@@ -890,6 +894,7 @@ void EditorTabComponent::saveSettings()
         appProperties->setValue("MidiOutput", midiEngine.getCurrentMidiOutputName());
     }
     appProperties->setValue("SysexID", midiEngine.getSysexID());
+    appProperties->setValue("SynthTypeIsMatrix12", midiEngine.isSynthTypeMatrix12());
     appProperties->setValue("SynthInput", midiEngine.getSynthInputName());
     appProperties->setValue("ProgramNumber", programSelector.getSelectedId());
     if (ccMapPanel_)

@@ -83,6 +83,14 @@ public:
     void setCurrentProgram(int p) { currentProgram = juce::jlimit(0, 99, p); }
     int  getCurrentProgram() const { return currentProgram; }
 
+    // Manual synth-model flag (Xpander vs Matrix-12). Cannot be auto-detected: both
+    // models transmit the same SysEx device-ID byte (see [id] byte in CLAUDE-MEMORY.md,
+    // sessions 51/53), so this is a user-set switch, not learned from incoming SysEx.
+    // Selects the model-dependent command byte needed by features like the display
+    // banner (G1) and the all-data-dump request (G3).
+    void setSynthTypeIsMatrix12(bool isMatrix12) { synthTypeIsMatrix12 = isMatrix12; }
+    bool isSynthTypeMatrix12() const { return synthTypeIsMatrix12; }
+
     // Set while applying hardware-initiated updates so onValueChange callbacks
     // don't re-send the parameter back to the synth and cause a double-increment.
     // Set only on the message thread; read from the message thread and (by the
@@ -225,6 +233,7 @@ private:
     // Cross-thread scalars: written on the MIDI thread (auto-detect, rx page tracking)
     // and/or message thread (setters, queue drain), read from the other side.
     std::atomic<int> sysexID { 2 };
+    std::atomic<bool> synthTypeIsMatrix12 { false };
     juce::String synthInputName;  // designated synth input; guarded by listenerLock
     std::atomic<int> lastSentPage { -1 };  // page last actually sent to the synth (updated at drain time)
     std::atomic<int> lastSentMode { -1 };

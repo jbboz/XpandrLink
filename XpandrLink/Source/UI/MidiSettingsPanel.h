@@ -78,6 +78,27 @@ public:
         statusLabel_.setFont(ThemeData::getVfdFont(11.0f));
         addAndMakeVisible(statusLabel_);
 
+        modelLabel_.setText("MODEL", juce::dontSendNotification);
+        modelLabel_.setJustificationType(juce::Justification::centredLeft);
+        modelLabel_.setColour(juce::Label::textColourId, theme.textLabel);
+        modelLabel_.setFont(ThemeData::getVfdFont(11.0f));
+        addAndMakeVisible(modelLabel_);
+
+        // Manual toggle — the SysEx stream can't tell Xpander from Matrix-12 (both
+        // transmit the same unit-ID byte), so the user must set this. It selects the
+        // model-dependent command byte for features like the display banner (G1) and
+        // the all-data-dump request (G3).
+        modelBtn_.setLookAndFeel(&hwLF_);
+        modelBtn_.setTooltip("Xpander vs Matrix-12 can't be told apart from the MIDI "
+                             "stream (both send the same unit ID) — set this manually "
+                             "to match your hardware.");
+        modelBtn_.onClick = [this] {
+            midiEngine_.setSynthTypeIsMatrix12(!midiEngine_.isSynthTypeMatrix12());
+            refresh();
+            if (onChanged) onChanged();
+        };
+        addAndMakeVisible(modelBtn_);
+
         refresh();
     }
 
@@ -96,6 +117,7 @@ public:
     ~MidiSettingsPanel() override
     {
         refreshBtn_.setLookAndFeel(nullptr);
+        modelBtn_.setLookAndFeel(nullptr);
     }
 
     void refresh()
@@ -139,6 +161,8 @@ public:
             statusLabel_.setText("Not Connected", juce::dontSendNotification);
             statusLabel_.setColour(juce::Label::textColourId, theme.vfdDim);
         }
+
+        modelBtn_.setButtonText(midiEngine_.isSynthTypeMatrix12() ? "MATRIX-12" : "XPANDER");
     }
 
     void resized() override
@@ -178,6 +202,12 @@ public:
         synthLed_.setBounds(boxInner.removeFromLeft(16).withSizeKeepingCentre(10, 10));
         boxInner.removeFromLeft(4);
         statusLabel_.setBounds(boxInner);
+
+        right.removeFromTop(8);
+        auto modelRow = right.removeFromTop(26);
+        modelLabel_.setBounds(modelRow.removeFromLeft(46));
+        modelRow.removeFromLeft(4);
+        modelBtn_.setBounds(modelRow.removeFromLeft(90));
     }
 
 private:
@@ -224,8 +254,8 @@ private:
     MidiEngine&  midiEngine_;
     juce::StringArray availableInputs_;
 
-    juce::Label          headerLabel_, outputLabel_, idLabel_, statusLabel_;
-    juce::TextButton     refreshBtn_;
+    juce::Label          headerLabel_, outputLabel_, idLabel_, statusLabel_, modelLabel_;
+    juce::TextButton     refreshBtn_, modelBtn_;
     juce::ListBox        inputList_;
     juce::ComboBox       outputBox_;
     SynthLed             synthLed_;
