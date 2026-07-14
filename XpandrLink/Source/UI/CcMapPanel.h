@@ -15,10 +15,19 @@ public:
 
     CcMapPanel(MidiEngine& engine) : midiEngine_(engine)
     {
-        // Build the shared item list once: a plain "unmapped" row + every param name.
+        // Build the shared item list once: a plain "unmapped" row + every param, prefixed
+        // with its group (e.g. "VCF Res", "ENV 1 Amp", "LFO 2 Speed"). Many param names
+        // are single generic words ("Res", "Amp", "Freq", "Speed") reused across several
+        // modules -- the bare name alone doesn't say which one, e.g. "Res" could easily be
+        // mistaken for something other than VCF resonance. The group prefix disambiguates.
         paramItems_.add("unmapped");
         for (auto& p : XpanderParams)
-            paramItems_.add(p.name);
+        {
+            juce::String label = p.group;
+            if (p.name.isNotEmpty())
+                label = label.isNotEmpty() ? (label + " " + p.name) : p.name;
+            paramItems_.add(label);
+        }
 
         clearAllBtn_.setButtonText("Clear All");
         clearAllBtn_.onClick = [this] {

@@ -182,6 +182,12 @@ juce::String MidiEngine::getSynthInputName() const
     return synthInputName;
 }
 
+bool MidiEngine::hasSeenSynthThisSession() const
+{
+    const juce::ScopedLock sl(listenerLock);
+    return synthSeenThisSession;
+}
+
 void MidiEngine::broadcastParameterChange(int page, int paramCol, int value, bool isDelta, bool isButton) {
     const juce::ScopedLock sl(listenerLock);
     for (auto* l : listeners)
@@ -235,6 +241,16 @@ void MidiEngine::sendSysex(const std::vector<unsigned char>& data) {
 void MidiEngine::timerCallback()
 {
     auto now = juce::Time::getMillisecondCounter();
+
+    // Flush a coalesced mod-matrix amount drag once its throttle window has passed --
+    // sends only the latest value a fast drag settled on, never an intermediate tick.
+    if (pendingModAmount_.valid && !shouldCoalesceModAmount(now, lastModAmountSendTime_, Oberheim::kModCmdGapMs))
+    {
+        auto pending = pendingModAmount_;
+        pendingModAmount_.valid = false;
+        sendModAmountNow(pending.destIndex, pending.idSource, pending.amount);
+    }
+
     while (!sendQueue.empty())
     {
         // Use signed subtraction to handle uint32 wraparound (~49-day period).
@@ -501,9 +517,14 @@ void MidiEngine::removeModulation(int sourceIndex, int destIndex, int idSource) 
     for (auto* l : listeners) l->onStatusUpdate(msg);
 }
 
-void MidiEngine::changeModulationAmount(int destIndex, int idSource, int newAmount) {
-    if (destIndex < 0 || destIndex >= kModDestCount) return;
+bool MidiEngine::shouldCoalesceModAmount(juce::uint32 now, juce::uint32 lastSendTime, int throttleMs)
+{
+    auto elapsed = (juce::int32)(now - lastSendTime);
+    return elapsed >= 0 && elapsed <= throttleMs;
+}
 
+void MidiEngine::sendModAmountNow(int destIndex, int idSource, int newAmount)
+{
     int absAmt = std::abs(newAmount);
     auto dest  = kModDestTable[destIndex];
     auto id    = (uint8_t)(sysexID);
@@ -522,15 +543,63 @@ void MidiEngine::changeModulationAmount(int destIndex, int idSource, int newAmou
 
     // No gap between SETSIGN and SETUNSIGNEDVALUE here — the slot already exists.
     // A 50ms gap here causes rapid knob-drag events to stack up settle delays (500ms+ backlog).
+    // The flood risk that gap was originally meant to prevent a different way is now handled
+    // by the caller's throttle/coalesce gate (changeModulationAmount), not a per-message delay.
     enqueuePageSelectIfNeeded(dest.page, dest.subPage, Oberheim::kModCmdGapMs);
     enqueueMessage(std::move(setSign), 0);
     enqueueMessage(std::move(setAmt), 0);
+
+    lastModAmountSendTime_ = juce::Time::getMillisecondCounter();
 
     juce::String msg = "MOD CHANGE AMT: dest=" + juce::String(destIndex)
                      + " idSrc=" + juce::String(idSource)
                      + " amt=" + juce::String(newAmount);
     const juce::ScopedLock sl(listenerLock);
     for (auto* l : listeners) l->onStatusUpdate(msg);
+}
+
+void MidiEngine::changeModulationAmount(int destIndex, int idSource, int newAmount) {
+    if (destIndex < 0 || destIndex >= kModDestCount) return;
+
+    // A fast slider drag can call this dozens of times a second. Sending every intermediate
+    // value as its own SETSIGN+SETUNSIGNEDVALUE pair (zero delay between them, by design --
+    // see sendModAmountNow) floods the synth's MIDI IN faster than its UART/firmware can keep
+    // up, observed as a temporary hardware lockup that self-recovers once the flood stops
+    // (found 2026-07-13, especially reproducible on VCA1/VCA2 Vol). Only the latest value
+    // within a throttle window is ever actually sent -- intermediate drag ticks are coalesced.
+    auto now = juce::Time::getMillisecondCounter();
+    if (shouldCoalesceModAmount(now, lastModAmountSendTime_, Oberheim::kModCmdGapMs))
+    {
+        pendingModAmount_ = { true, destIndex, idSource, newAmount };
+        return;
+    }
+    sendModAmountNow(destIndex, idSource, newAmount);
+}
+
+std::vector<uint8_t> MidiEngine::buildChangeSourceMessage(uint8_t sysexId, uint8_t idSource, uint8_t newSource)
+{
+    return {
+        0xF0, 0x10, sysexId, 0x0F, 0x00,
+        idSource, 0x00, 0x02,   // cmd = CHANGESOURCE
+        0x00, newSource, 0x00, 0xF7
+    };
+}
+
+void MidiEngine::changeModulationSource(int destIndex, int idSource, int newSourceIndex) {
+    if (destIndex < 0 || destIndex >= kModDestCount
+        || newSourceIndex < 0 || newSourceIndex > 26) return;
+
+    auto dest = kModDestTable[destIndex];
+    auto msg  = buildChangeSourceMessage((uint8_t)(sysexID), (uint8_t)idSource, (uint8_t)newSourceIndex);
+
+    enqueuePageSelectIfNeeded(dest.page, dest.subPage, Oberheim::kSliderPageSettleMs);
+    enqueueMessage(std::move(msg), 0);
+
+    juce::String msg2 = "MOD CHANGE SOURCE: dest=" + juce::String(destIndex)
+                      + " idSrc=" + juce::String(idSource)
+                      + " newSrc=" + juce::String(newSourceIndex);
+    const juce::ScopedLock sl(listenerLock);
+    for (auto* l : listeners) l->onStatusUpdate(msg2);
 }
 
 void MidiEngine::addListener(Listener* l) {
@@ -998,12 +1067,31 @@ void MidiEngine::handleIncomingMidiMessage(juce::MidiInput* source, const juce::
         if (len > 16) logMsg += "...";
 
         if (len >= 3 && data[0] == 0x10) {
-            // Auto-designate the first port that sends valid Oberheim SysEx as the synth input.
+            // Auto-designate the first port that sends valid Oberheim SysEx as the synth input
+            // (persisted routing setting — which port to treat as "the synth" for thru/CC gating).
+            bool justDesignatedPort = false;
             if (synthIn.isEmpty() && source != nullptr)
             {
                 synthIn = source->getName();
                 const juce::ScopedLock sl(listenerLock);
                 synthInputName = synthIn;
+                justDesignatedPort = true;
+            }
+
+            // Live, non-persisted "seen this session" confirmation — separate from the
+            // routing name above, which can be restored from a *previous* session's
+            // settings even while the synth is powered off right now. Fires once per
+            // session, the first time we actually see a real Oberheim message, so the
+            // SYNTH LED reflects a live sighting instead of stale routing config.
+            bool justConfirmedLive = false;
+            {
+                const juce::ScopedLock sl(listenerLock);
+                if (!synthSeenThisSession) { synthSeenThisSession = true; justConfirmedLive = true; }
+            }
+
+            if (justDesignatedPort || justConfirmedLive)
+            {
+                const juce::ScopedLock sl(listenerLock);
                 for (auto* l : listeners) l->onSynthInputDetected(synthIn);
             }
 

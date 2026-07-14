@@ -659,30 +659,57 @@ void PatchBrowserPanel::doStore()
         "load and audition.",
         juce::MessageBoxIconType::WarningIcon);
     alert->addTextEditor("slot", "0", "Slot (0-98):");
-    alert->addButton("Store", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    alert->addButton("Next", 1, juce::KeyPress(juce::KeyPress::returnKey));
     alert->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
 
     juce::Component::SafePointer<PatchBrowserPanel> safe(this);
     alert->enterModalState(true,
         juce::ModalCallbackFunction::create([safe, alert](int result) {
-            if (!safe) { delete alert; return; }
+            int slot = alert->getTextEditorContents("slot").getIntValue();
+            delete alert;
+            if (!safe || result != 1) return;
+
+            if (slot < 0 || slot > 98)
+            {
+                juce::NativeMessageBox::showMessageBoxAsync(
+                    juce::MessageBoxIconType::WarningIcon,
+                    "Invalid Slot",
+                    "Slot must be 0-98. Slot 99 is XpandrLink's scratchpad and "
+                    "cannot be used for a permanent store.");
+                safe->statusLabel_.setText("Store cancelled - slot must be 0-98",
+                                           juce::dontSendNotification);
+                return;
+            }
+
+            safe->confirmAndStore(slot);
+        }), true);
+}
+
+// Second, explicit confirmation step naming the exact target slot — separate from the
+// slot-entry dialog above so a user who typed a number and hit Enter/Store still gets a
+// distinct "are you sure" prompt before hardware memory is overwritten.
+void PatchBrowserPanel::confirmAndStore(int slot)
+{
+    auto* confirm = new juce::AlertWindow("Confirm Store",
+        "Store the current patch to slot " + juce::String(slot) + "?\n\n"
+        "This permanently overwrites whatever patch is currently in slot "
+        + juce::String(slot) + " on the synth. This cannot be undone.",
+        juce::MessageBoxIconType::WarningIcon);
+    confirm->addButton("Store", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    confirm->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+
+    juce::Component::SafePointer<PatchBrowserPanel> safe(this);
+    confirm->enterModalState(true,
+        juce::ModalCallbackFunction::create([safe, slot, confirm](int result) {
+            if (!safe) { delete confirm; return; }
             if (result == 1)
             {
-                int slot = alert->getTextEditorContents("slot").getIntValue();
-                if (slot < 0 || slot > 98)
-                {
-                    safe->statusLabel_.setText("Store failed - slot must be 0-98",
-                                               juce::dontSendNotification);
-                }
-                else
-                {
-                    safe->getCurrentSysex();  // refresh MidiEngine's cache from the live editor
-                    safe->midiEngine_.storePatchToSlot(slot);
-                    safe->statusLabel_.setText("Stored to slot " + juce::String(slot),
-                                               juce::dontSendNotification);
-                }
+                safe->getCurrentSysex();  // refresh MidiEngine's cache from the live editor
+                safe->midiEngine_.storePatchToSlot(slot);
+                safe->statusLabel_.setText("Stored to slot " + juce::String(slot),
+                                           juce::dontSendNotification);
             }
-            delete alert;
+            delete confirm;
         }), true);
 }
 

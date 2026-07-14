@@ -78,6 +78,14 @@ public:
     void setSynthInput(const juce::String& deviceName);
     juce::String getSynthInputName() const;   // guarded — safe from any thread
 
+    // True once a genuine Oberheim SysEx has actually been received in THIS run of the
+    // app. Deliberately NOT persisted and NOT the same thing as getSynthInputName(),
+    // which is a routing setting restored from a previous session's settings file — a
+    // MIDI port name stays "available" in the OS regardless of whether the synth
+    // plugged into it is powered on, so getSynthInputName().isNotEmpty() alone is not
+    // proof of a live connection. Used to drive the SYNTH presence LED honestly.
+    bool hasSeenSynthThisSession() const;   // guarded — safe from any thread
+
     void setMidiOutput(const juce::String& deviceName);
     void setSysexID(int id);
     void setCurrentProgram(int p) { currentProgram = juce::jlimit(0, 99, p); }
@@ -103,6 +111,15 @@ public:
     void addModulation(int sourceIndex, int destIndex, int amount, int idSourceForAmtAndSign);
     void removeModulation(int sourceIndex, int destIndex, int idSource);
     void changeModulationAmount(int destIndex, int idSource, int newAmount);
+
+    // Atomic in-place source swap for an EXISTING mod-matrix entry (CHANGESOURCE, cmd=0x02).
+    // Never touches the entry's hardware slot (idSource) -- unlike delete+re-add, there is
+    // no risk of mispredicting which slot the hardware will assign the new source to.
+    void changeModulationSource(int destIndex, int idSource, int newSourceIndex);
+
+    // Public for unit testing: exact CHANGESOURCE byte layout, matches the C# reference
+    // (XpanderTone.ModulationMatrix.cs, EnumModulationEditCommands.CHANGESOURCE=0x02).
+    static std::vector<uint8_t> buildChangeSourceMessage(uint8_t sysexId, uint8_t idSource, uint8_t newSource);
     void sendProgramChange(int programNumber);
     void requestPatchDump(int programNumber = 0);
 
@@ -195,6 +212,11 @@ public:
     // Public for unit testing: decode the Oberheim sign-magnitude 2-byte encoding.
     static int decodeSysexValue(uint8_t val_lo, uint8_t val_hi);
 
+    // Public for unit testing: true if `now` is still within `throttleMs` of `lastSendTime`
+    // (i.e. a mod-matrix amount change should be coalesced/deferred rather than sent
+    // immediately). Wraparound-safe signed subtraction, same pattern as handleModRouting.
+    static bool shouldCoalesceModAmount(juce::uint32 now, juce::uint32 lastSendTime, int throttleMs);
+
     // CC automation table: map CC numbers (0-127) to Xpander parameter IDs.
     // Incoming CC from non-synth inputs is scaled to the param range and broadcast
     // as a parameter-from-hardware event (does NOT send to synth — same as HW knob path).
@@ -260,6 +282,7 @@ private:
     std::atomic<int> sysexID { 2 };
     std::atomic<bool> synthTypeIsMatrix12 { false };
     juce::String synthInputName;  // designated synth input; guarded by listenerLock
+    bool synthSeenThisSession = false;  // live confirmation, not persisted; guarded by listenerLock
     std::atomic<int> lastSentPage { -1 };  // page last actually sent to the synth (updated at drain time)
     std::atomic<int> lastSentMode { -1 };
     std::atomic<int> currentRxPage    { -1 };
@@ -267,6 +290,18 @@ private:
     std::atomic<int> currentProgram   { 0 };  // tracks hardware program number; updated by ProgramChange and nav SysEx
     std::atomic<bool> hardwareUpdateMode { false };  // set on message thread; blocks sendParameterToSynth during hw updates
     std::atomic<juce::uint32> lastModSentTime_ { 0 }; // ms counter updated when a 0x0F message is drained; suppresses echoes
+
+    // Rapid drag coalescing for mod-matrix amount changes (message-thread only, same as
+    // the rest of the send-queue machinery). A fast slider drag can fire changeModulationAmount
+    // dozens of times a second; since SETSIGN+SETUNSIGNEDVALUE have zero delay between them
+    // (deliberately -- see changeModulationAmount), timerCallback's drain-all-zero-delay-messages
+    // loop would flood the synth's MIDI IN far faster than its UART/firmware can keep up,
+    // observed as a temporary hardware lockup that self-recovers once the flood stops
+    // (found 2026-07-13). Only the LATEST value during a throttle window is ever sent.
+    struct PendingModAmount { bool valid = false; int destIndex = -1; int idSource = -1; int amount = 0; };
+    PendingModAmount pendingModAmount_;
+    juce::uint32 lastModAmountSendTime_ { 0 };
+    void sendModAmountNow(int destIndex, int idSource, int newAmount);
 
     // CC automation map — accessed from both message thread (write) and MIDI thread (read).
     // Protected by listenerLock. paramId=-1 means unmapped.

@@ -168,10 +168,15 @@ public:
         auto currentOut = midiEngine_.getCurrentMidiOutputName();
         outputBox_.setText(currentOut, juce::dontSendNotification);
 
-        // Synth presence LED: lit once any port has sent Oberheim SysEx (getSynthInputName
-        // is non-empty). Not a model readout — the SysEx unit-ID byte can't distinguish
-        // Xpander from Matrix-12 (both transmit 0x02).
-        synthLed_.lit = midiEngine_.getSynthInputName().isNotEmpty();
+        // Synth presence LED: lit once a genuine Oberheim SysEx has actually been received
+        // THIS session (hasSeenSynthThisSession) — NOT merely because a routing setting for
+        // a previously-used port was restored from settings, which stays populated even
+        // while the synth is powered off. Not a model readout — the SysEx unit-ID byte
+        // can't distinguish Xpander from Matrix-12 (both transmit 0x02). No MIDI heartbeat
+        // exists in this protocol, so once lit this session it stays lit even if the synth
+        // is later powered off mid-session — a live "still connected" check isn't possible
+        // without polling the hardware.
+        synthLed_.lit = midiEngine_.hasSeenSynthThisSession();
         synthLed_.repaint();
 
         auto& theme = ThemeData::getHardwareTheme();

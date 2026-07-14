@@ -1,8 +1,10 @@
 #include <JuceHeader.h>
 #include "BUG01_KnobColDecodeTest.h"
 #include "BUG05_ProgramChangeSysexTest.h"
+#include "ChangeModulationSourceTest.h"
 #include "IDSourceTrackingTest.h"
 #include "InitPatchLoadTest.h"
+#include "ModAmountCoalesceTest.h"
 #include "PatchRandomizerSafetyTest.h"
 
 int main()

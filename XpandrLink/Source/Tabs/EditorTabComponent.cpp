@@ -254,6 +254,16 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
         int newIdSrc = voiceArch->getNextIdSourceForDest(newDstIdx);
         voiceArch->removeModulationEntry(srcIdx, oldDstIdx);
         midiEngine.removeModulation(srcIdx, oldDstIdx, idSource);
+        // Any OTHER entries left behind at oldDstIdx with a higher slot number get
+        // renumbered by the hardware after this delete -- our client-side bookkeeping
+        // for those entries must follow, or a future edit to one of them will send
+        // SETSIGN/SETUNSIGNEDVALUE/DELETESOURCE to the wrong slot (real hardware-lockup
+        // bug, found 2026-07-12 -- see CLAUDE-MEMORY.md). Mirrors removeModCb below.
+        if (idSource >= 0)
+        {
+            voiceArch->decrementIdSourceAfterRemove(oldDstIdx, idSource);
+            fullModMatrix->decrementIdSourceAfterRemove(oldDstIdx, idSource);
+        }
         juce::Timer::callAfterDelay(250, [safeThis, srcIdx, newDstIdx, amount, newIdSrc]() {
             if (!safeThis) return;
             safeThis->midiEngine.addModulation(srcIdx, newDstIdx, amount, newIdSrc);
@@ -263,28 +273,45 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
         });
     };
 
-    // When user selects a new source in either panel, reroute: remove old + add new.
-    // Source change FROM fullModMatrix: modSummary still has oldSrcIdx → remove+add is correct.
+    // When user selects a new source for an EXISTING entry, swap it in place via the
+    // atomic CHANGESOURCE command (cmd=0x02) -- never delete+re-add. Delete+re-add
+    // requires predicting which hardware slot the re-add will auto-append to, which
+    // silently corrupts a DIFFERENT entry's sign/amount when the prediction is wrong
+    // (real hardware-lockup bug, found 2026-07-12 -- see CLAUDE-MEMORY.md). CHANGESOURCE
+    // keeps the entry's idSource untouched, so there is nothing to mispredict.
+    // Source change FROM fullModMatrix: modSummary still has oldSrcIdx → remove+add locally.
     fullModMatrix->onSourceChanged = [this](int oldSrcIdx, int newSrcIdx, int destIdx, int amount, int idSource) {
-        juce::Component::SafePointer<EditorTabComponent> safeThis(this);
-        voiceArch->removeModulationEntry(oldSrcIdx, destIdx);
-        voiceArch->addModulationEntry(newSrcIdx, destIdx, amount, idSource);
-        midiEngine.removeModulation(oldSrcIdx, destIdx, idSource);
-        juce::Timer::callAfterDelay(250, [safeThis, newSrcIdx, destIdx, amount, idSource]() {
-            if (safeThis == nullptr) return;
-            safeThis->midiEngine.addModulation(newSrcIdx, destIdx, amount, idSource);
-        });
+        if (idSource >= 0)
+        {
+            midiEngine.changeModulationSource(destIdx, idSource, newSrcIdx);
+            voiceArch->removeModulationEntry(oldSrcIdx, destIdx);
+            voiceArch->addModulationEntry(newSrcIdx, destIdx, amount, idSource);
+        }
+        else
+        {
+            // No slot was ever established on hardware (e.g. destination was already at
+            // its 6-source cap) -- nothing to change in place, treat as a fresh add.
+            int nextIdSrc = voiceArch->getNextIdSourceForDest(destIdx);
+            midiEngine.addModulation(newSrcIdx, destIdx, amount, nextIdSrc);
+            voiceArch->removeModulationEntry(oldSrcIdx, destIdx);
+            voiceArch->addModulationEntry(newSrcIdx, destIdx, amount, nextIdSrc);
+            fullModMatrix->updateEntrySource(oldSrcIdx, destIdx, newSrcIdx);
+        }
     };
 
     // Source change FROM modSummary: fullModMatrix still has oldSrcIdx → update in-place.
     voiceArch->setOnSourceChanged([this](int oldSrcIdx, int newSrcIdx, int destIdx, int amount, int idSource) {
-        juce::Component::SafePointer<EditorTabComponent> safeThis(this);
-        fullModMatrix->updateEntrySource(oldSrcIdx, destIdx, newSrcIdx);
-        midiEngine.removeModulation(oldSrcIdx, destIdx, idSource);
-        juce::Timer::callAfterDelay(250, [safeThis, newSrcIdx, destIdx, amount, idSource]() {
-            if (safeThis == nullptr) return;
-            safeThis->midiEngine.addModulation(newSrcIdx, destIdx, amount, idSource);
-        });
+        if (idSource >= 0)
+        {
+            midiEngine.changeModulationSource(destIdx, idSource, newSrcIdx);
+            fullModMatrix->updateEntrySource(oldSrcIdx, destIdx, newSrcIdx);
+        }
+        else
+        {
+            int nextIdSrc = voiceArch->getNextIdSourceForDest(destIdx);
+            midiEngine.addModulation(newSrcIdx, destIdx, amount, nextIdSrc);
+            fullModMatrix->updateEntrySource(oldSrcIdx, destIdx, newSrcIdx);
+        }
     });
 
     // Empty slot SRC picker: create a new mod entry using the pending amount (default +63).

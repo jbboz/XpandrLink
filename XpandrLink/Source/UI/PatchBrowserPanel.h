@@ -99,6 +99,7 @@ private:
     void doRename();
     void doRemove();
     void doStore();
+    void confirmAndStore(int slot);
     void cycleSort();
     void updateSortButtonLabel();
     void doEditDescription(int row);

@@ -49,6 +49,35 @@ namespace PatchRandomizer
         constexpr int VCF_FREQ  = 40, VCA1_VOL = 43, VCA2_VOL = 44;
         constexpr int ENV1_DELAY = 130, ENV1_ATK = 131, ENV1_DEC = 132,
                       ENV1_SUS = 133, ENV1_REL = 134, ENV1_AMP = 135;
+        constexpr int ENV1_MODE_RESET = 136, ENV1_MODE_FREERUN = 137, ENV1_MODE_DADR = 138,
+                      ENV1_TRIG_MULTI = 139, ENV1_TRIG_EXTRIG = 140, ENV1_TRIG_LFO = 141,
+                      ENV1_TRIG_LFOSRC = 142, ENV1_TRIG_GATED = 143;
+    }
+
+    // Four envelope archetypes ported from the upstream reference's amplitude-safety
+    // pass (XpanderTone.ForceEnv2ModVca2AfterRandomizeMatrix, which does this for
+    // ENV2->VCA2 -- we do the equivalent for ENV1->VCA1). Each row is
+    // {Delay, Attack, Decay, Sustain, Release, Amp}. Deliberately a FULL, fixed
+    // definition rather than a partial floor of whatever the envelope already was:
+    // a floor-only approach (this project's first attempt at this fix) can still
+    // leave an enormous attack/decay time in place, which reads as "inaudible" within
+    // any normal test-hold length even though the envelope isn't technically silent.
+    // Percussive/PercussiveWithRelease intentionally have a low or zero sustain --
+    // that's a deliberate style choice upstream supports, not a bug to float away.
+    enum class VcaEnvStyle { Organ, StringPad, Percussive, PercussiveWithRelease, NumStyles };
+    inline const int* vcaEnvArchetype(VcaEnvStyle style)
+    {
+        static const int organ[6]       = { 0, 63, 63, 63,  0, 63 };
+        static const int stringPad[6]   = { 0, 30, 63, 63, 32, 63 };
+        static const int percussive[6]  = { 0,  0, 63, 10,  0, 63 };
+        static const int percRelease[6] = { 0,  0, 63,  0, 32, 63 };
+        switch (style)
+        {
+            case VcaEnvStyle::Organ:      return organ;
+            case VcaEnvStyle::StringPad:  return stringPad;
+            case VcaEnvStyle::Percussive: return percussive;
+            default:                      return percRelease;
+        }
     }
 
     // Map a parameter ID to its section (NumSections = unknown / skip). Ranges follow
@@ -85,11 +114,24 @@ namespace PatchRandomizer
     {
         if (!cfg.musicalSafety) return;
 
-        // VCO1 must produce a waveform (bitmask 0 = silent oscillator).
-        if (currentOr(p, ids::VCO1_WAVE, 0) == 0) p[ids::VCO1_WAVE] = 1; // TRI
-        // Keep VCO1 contributing to the mix and the filter at least partly open.
-        if (currentOr(p, ids::VCO1_VOL, 0)  < 40) p[ids::VCO1_VOL]  = 50;
-        if (currentOr(p, ids::VCF_FREQ, 0)  < 40) p[ids::VCF_FREQ]  = 90;
+        // These audibility floors only apply within the section(s) the user actually
+        // opted into randomizing — matching how VCO2/MOD/ENV/RAMP are already scoped
+        // below. Applying them unconditionally meant a roll with every section
+        // switched off (or only an unrelated section on, e.g. LFO alone) still forced
+        // VCO1's waveform/volume and the VCF cutoff, changing parameters the user never
+        // asked to touch.
+        if (cfg.isOn(VCO1))
+        {
+            // VCO1 must produce a waveform (bitmask 0 = silent oscillator).
+            if (currentOr(p, ids::VCO1_WAVE, 0) == 0) p[ids::VCO1_WAVE] = 1; // TRI
+            // Keep VCO1 contributing to the mix.
+            if (currentOr(p, ids::VCO1_VOL, 0)  < 40) p[ids::VCO1_VOL]  = 50;
+        }
+        if (cfg.isOn(VCF))
+        {
+            // Keep the filter at least partly open.
+            if (currentOr(p, ids::VCF_FREQ, 0)  < 40) p[ids::VCF_FREQ]  = 90;
+        }
 
         // Optionally tune VCO2 to a musical interval of VCO1 (units are semitones).
         if (cfg.isOn(VCO2))
@@ -101,13 +143,56 @@ namespace PatchRandomizer
 
         if (cfg.isOn(MOD))
         {
-            // ENV1 will be wired to VCA1 (see randomizeModBytes) → give it a usable shape
-            // and let the envelope control amplitude (VCA1 base closed).
-            if (currentOr(p, ids::ENV1_AMP, 0) < 50) p[ids::ENV1_AMP] = 63;
-            int atk = currentOr(p, ids::ENV1_ATK, 0), dec = currentOr(p, ids::ENV1_DEC, 0),
-                sus = currentOr(p, ids::ENV1_SUS, 0), rel = currentOr(p, ids::ENV1_REL, 0);
-            if (atk == 0 && dec == 0 && sus == 0 && rel == 0)   // silent envelope → Organ-ish
-            { p[ids::ENV1_DELAY] = 0; p[ids::ENV1_SUS] = 63; p[ids::ENV1_REL] = 20; }
+            // MOD's whole audibility guarantee below (ENV1 forced to a real archetype,
+            // VCA1 zeroed so only the envelope gates it) is worthless if a stage further
+            // upstream is fully closed -- the oscillator must be producing a waveform at
+            // an audible volume and the filter must be at least partly open, or there is
+            // no signal for VCA1 to gate in the first place. The VCO1/VCF floors above
+            // only fire when cfg.isOn(VCO1)/cfg.isOn(VCF), and MOD-only rolls (the
+            // standard test case for this whole audibility saga) leave both off, so MOD
+            // needs its own copy of the same floor. (Found 2026-07-12, fix attempt 4:
+            // three earlier fixes all targeted ENV1/mod-matrix mechanics and missed that a
+            // closed filter or muted oscillator upstream of VCA1 silences a patch no
+            // matter how correct the envelope/routing is.)
+            if (currentOr(p, ids::VCO1_WAVE, 0) == 0) p[ids::VCO1_WAVE] = 1; // TRI
+            if (currentOr(p, ids::VCO1_VOL, 0)  < 40) p[ids::VCO1_VOL]  = 50;
+            if (currentOr(p, ids::VCF_FREQ, 0)  < 40) p[ids::VCF_FREQ]  = 90;
+
+            // ENV1 becomes the SOLE amplitude source via the forced ENV1->VCA1 route
+            // (randomizeModBytes) -- VCA1_VOL itself is zeroed below so a stuck/self-
+            // cycling envelope can never leave a static, gate-independent drone (TASK-07).
+            // Ported from the upstream reference's ForceEnv2ModVca2AfterRandomizeMatrix:
+            // fully overwrite ENV1's shape with one of the fixed archetypes above (picked
+            // at random for variety) rather than floor/adjust whatever the previously-
+            // loaded patch (or, if ENV scope is ALSO on this roll, the main per-param
+            // randomize loop) left ENV1 at. Two earlier attempts at a partial floor both
+            // failed to reliably fix "randomize MOD gives inaudible patches" -- a floor on
+            // sustain/delay alone can still leave an enormous, un-capped attack or decay
+            // time in place, which reads as silence within any normal test-hold length even
+            // though the envelope isn't technically zero. A full, known-good archetype
+            // removes that whole class of leftover-state bug.
+            auto style = static_cast<VcaEnvStyle>(rng.nextInt(static_cast<int>(VcaEnvStyle::NumStyles)));
+            const int* env = vcaEnvArchetype(style);
+            p[ids::ENV1_DELAY] = env[0];
+            p[ids::ENV1_ATK]   = env[1];
+            p[ids::ENV1_DEC]   = env[2];
+            p[ids::ENV1_SUS]   = env[3];
+            p[ids::ENV1_REL]   = env[4];
+            p[ids::ENV1_AMP]   = env[5];
+
+            // Disable every trigger/mode flag so ENV1 behaves as a plain, note-gated
+            // envelope -- matches upstream's unconditional reset of the same 8 flags
+            // (RESET/FREERUN/DADR/TRIG_MULTI/TRIG_EXTRIG/TRIG_LFO/TRIG_LFOSRC/TRIG_GATED)
+            // regardless of whether ENV scope is separately enabled this roll.
+            p[ids::ENV1_MODE_RESET]   = 0;
+            p[ids::ENV1_MODE_FREERUN] = 0;
+            p[ids::ENV1_MODE_DADR]    = 0;
+            p[ids::ENV1_TRIG_MULTI]   = 0;   // Single, not Multi
+            p[ids::ENV1_TRIG_EXTRIG]  = 0;
+            p[ids::ENV1_TRIG_LFO]     = 0;
+            p[ids::ENV1_TRIG_LFOSRC]  = 0;
+            p[ids::ENV1_TRIG_GATED]   = 0;
+
             p[ids::VCA1_VOL] = 0;     // amplitude comes from the ENV1 -> VCA1 routing
         }
         // else: MOD scope is off, so no ENV->VCA route will be (re)established here.
@@ -204,11 +289,38 @@ namespace PatchRandomizer
         return out;
     }
 
+    // Destinations the musicalSafety amplitude path depends on: VCA1/VCA2 vol (the gain
+    // stage) and ENV1's own five mod-matrix destinations (Dly/Atk/Dcy/Rel/Amp) -- a
+    // *modulated* stage time or amp on ENV1 can move it away from the raw shape
+    // applyMusicalSafety just set, same as a direct level modulation on VCA1/VCA2 can
+    // cancel out slot 0's forced ENV1->VCA1 route. See ModDestinations in XpanderData.h
+    // for the index order this matches (VCA1_VOL=8, VCA2_VOL=9, Env1 Dly..Amp=20..24).
+    inline bool isAmplitudeSafetyDestination(int dest)
+    {
+        return dest == 8 || dest == 9 || (dest >= 20 && dest <= 24);
+    }
+
     // Regenerate the 60-byte mod-matrix region (20 entries × [source, amount, dest]).
     // Unused slots use the hardware convention source=0x1F, dest=0x3F. Active slots get
     // a random valid source (<=26), dest (<=46) and signed amount — matching the decode
     // rules in ModSummaryPanel. With musicalSafety, slot 0 is forced to ENV1 -> VCA1 so
     // the amp envelope (shaped by applyMusicalSafety) actually drives the VCA.
+    //
+    // Hardware allows at most MAX_MODULATION_SOURCE (6) simultaneous sources routed to
+    // the same destination — confirmed against the reference GetNextAvailableModIDSourceForDest,
+    // whose RandomizeModulationMatrix re-rolls the destination until a free per-destination
+    // slot exists. A dump with more than 6 entries on one destination has nowhere for the
+    // firmware's internal per-destination source table to put the extras, and has been
+    // observed to lock up real hardware. Mirror that re-roll here.
+    //
+    // musicalSafety also excludes the destinations above from every OTHER (non-forced)
+    // active entry's random draw. Without this, one of the up-to-11 other random entries
+    // could independently land on VCA1_VOL (or an ENV1 stage) with an arbitrary, possibly
+    // strongly negative amount -- fighting the deliberately-installed ENV1->VCA1 safety
+    // route and producing an inaudible result even though that route itself is intact and
+    // correctly encoded. (Found 2026-07-12: an ENV1-shape-only fix did not resolve
+    // "randomize MOD gives inaudible patches" because this was a second, independent cause
+    // in the same safety pass.)
     inline std::array<uint8_t,60> randomizeModBytes(const std::array<uint8_t,60>& /*current*/,
                                                     const Config& cfg, juce::Random& rng)
     {
@@ -216,13 +328,27 @@ namespace PatchRandomizer
         const int amount   = juce::jlimit(1, 100, cfg.amount);
         const int nActive  = juce::jlimit(0, 20, (int) std::lround(amount / 100.0 * 12.0));
 
+        static constexpr int kMaxSourcesPerDest = 6;
+        std::array<int, 47> destCount{};
+        if (cfg.musicalSafety)
+            destCount[8] = 1;   // reserve VCA1 vol for the forced ENV1->VCA1 slot 0 below
+
         for (int i = 0; i < 20; ++i)
         {
             int base = i * 3;
             if (i < nActive)
             {
+                int dst = 0;
+                for (int attempt = 0; attempt < 100; ++attempt)
+                {
+                    dst = rng.nextInt(47);
+                    if (destCount[(size_t) dst] >= kMaxSourcesPerDest) continue;
+                    if (cfg.musicalSafety && isAmplitudeSafetyDestination(dst)) continue;
+                    break;
+                }
+                ++destCount[(size_t) dst];
+
                 int  src   = rng.nextInt(27);            // 0..26 (NONE=27 reserved for unused)
-                int  dst   = rng.nextInt(47);            // 0..46
                 int  val   = 1 + rng.nextInt(63);        // 1..63 (non-zero == active)
                 bool neg   = rng.nextBool();
                 bool qtz   = rng.nextInt(100) < 15;      // quantize occasionally
