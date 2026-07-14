@@ -899,6 +899,39 @@ void MidiEngine::sendAllNotesOff()
         activeOutput->sendMessageNow(juce::MidiMessage::allNotesOff(1));
 }
 
+void MidiEngine::storePatchToSlot(int slot)
+{
+    slot = juce::jlimit(0, 99, slot);
+
+    std::vector<uint8_t> cache;
+    {
+        const juce::ScopedLock sl(listenerLock);
+        cache = lastPatchSysexCache;
+    }
+    if (cache.size() != 399) return;
+
+    // Dump the patch stamped to the target slot and activate it via program-change
+    // (sendPatchBytesToSlot already does both, 150 ms apart).
+    sendPatchBytesToSlot(cache, slot);
+
+    // STORE commit: permanently writes the just-dumped patch into non-volatile patch
+    // memory at this slot (F0 10 [id] 07 [slot] F7, 6 bytes total — verified against
+    // XpanderController.StoreSinglePatchToSynth). This command byte does NOT collide
+    // with mod-matrix SETSIGN, whose top-level command byte is 0x0F, not 0x07 — see
+    // the G2 note in ROADMAP.md.
+    juce::String logMsg = "TX: Store id=" + juce::String((int)sysexID)
+                        + " prog=" + juce::String(slot);
+    {
+        const juce::ScopedLock sl(listenerLock);
+        for (auto* l : listeners) l->onStatusUpdate(logMsg);
+    }
+    enqueueMessage({0xF0, 0x10, (uint8_t)sysexID, 0x07, (uint8_t)slot, 0xF7},
+                   Oberheim::kPatchSendSettleMs);
+
+    // Re-request the slot to confirm the store landed.
+    enqueueAction([this, slot] { requestPatchDump(slot); }, 0);
+}
+
 void MidiEngine::handleIncomingMidiMessage(juce::MidiInput* source, const juce::MidiMessage& message) {
     // Drop real-time system messages: they arrive at very high frequency (MIDI clock
     // at 48/sec at 120 BPM, active sensing every 300ms) and would flood the message

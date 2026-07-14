@@ -62,7 +62,7 @@ private:
     juce::TextEditor  searchBox_;
     juce::TextButton  btnAll_, btnFav_, btnSort_;
     juce::ListBox     listBox_;
-    juce::TextButton  btnImport_, btnSave_, btnSaveAs_, btnRename_, btnRemove_, btnRemoveDupes_;
+    juce::TextButton  btnImport_, btnSave_, btnSaveAs_, btnRename_, btnRemove_, btnRemoveDupes_, btnStore_;
     juce::Label       statusLabel_;
     juce::TextButton  btnFolder_;
     juce::Label       folderLabel_;
@@ -98,6 +98,7 @@ private:
     void doSaveAs();
     void doRename();
     void doRemove();
+    void doStore();
     void cycleSort();
     void updateSortButtonLabel();
     void doEditDescription(int row);

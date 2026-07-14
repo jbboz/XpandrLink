@@ -416,7 +416,7 @@ void EditorTabComponent::openOrClosePatchBrowser()
     bool show = !patchBrowserPanel_->isVisible();
     if (show)
     {
-        const int pw = 470, ph = 540;
+        const int pw = 540, ph = 540;
         auto nameR = titleBar_->getVfdNameBounds();
         int x = juce::jlimit(0, juce::jmax(0, getWidth() - pw),
                              nameR.getCentreX() - pw / 2);
@@ -458,7 +458,7 @@ void EditorTabComponent::openMorphBBrowser()
 
     if (!morphBBrowserPanel_->isVisible())
     {
-        const int pw = 470, ph = 540;
+        const int pw = 540, ph = 540;
         int x = juce::jlimit(0, juce::jmax(0, getWidth() - pw), getWidth() / 2 - pw / 2);
         int y = juce::jlimit(0, juce::jmax(0, getHeight() - ph), 60);
         morphBBrowserPanel_->setBounds(x, y, pw, ph);

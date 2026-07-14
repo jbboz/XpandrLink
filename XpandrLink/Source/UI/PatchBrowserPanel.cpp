@@ -67,12 +67,14 @@ PatchBrowserPanel::PatchBrowserPanel(PatchLibrary& library, MidiEngine& engine)
     setupActionBtn(btnRename_,     "Rename");
     setupActionBtn(btnRemove_,     "Remove");
     setupActionBtn(btnRemoveDupes_, "Dedupe");
+    setupActionBtn(btnStore_,      "Store");
 
     btnImport_.onClick      = [this] { doImport(); };
     btnSave_.onClick        = [this] { doSaveCurrent(); };
     btnSaveAs_.onClick      = [this] { doSaveAs(); };
     btnRename_.onClick      = [this] { doRename(); };
     btnRemove_.onClick      = [this] { doRemove(); };
+    btnStore_.onClick       = [this] { doStore(); };
     btnRemoveDupes_.onClick = [this] {
         int dupes = 0;
         for (int i = 0; i < library_.getNumPatches(); ++i)
@@ -187,16 +189,17 @@ void PatchBrowserPanel::resized()
     statusBot.removeFromLeft(4);
     folderLabel_.setBounds(statusBot.reduced(0, 2));
 
-    // Footer — six buttons share the width evenly.
+    // Footer — seven buttons share the width evenly.
     auto footer = r.removeFromBottom(kFooterH).reduced(4, 3);
-    const int nBtns = 6, btnGap = 4;
+    const int nBtns = 7, btnGap = 4;
     int bw = (footer.getWidth() - (nBtns - 1) * btnGap) / nBtns;
     btnImport_.setBounds     (footer.removeFromLeft(bw)); footer.removeFromLeft(btnGap);
     btnSave_.setBounds       (footer.removeFromLeft(bw)); footer.removeFromLeft(btnGap);
     btnSaveAs_.setBounds     (footer.removeFromLeft(bw)); footer.removeFromLeft(btnGap);
     btnRename_.setBounds     (footer.removeFromLeft(bw)); footer.removeFromLeft(btnGap);
     btnRemove_.setBounds     (footer.removeFromLeft(bw)); footer.removeFromLeft(btnGap);
-    btnRemoveDupes_.setBounds(footer);
+    btnRemoveDupes_.setBounds(footer.removeFromLeft(bw)); footer.removeFromLeft(btnGap);
+    btnStore_.setBounds(footer);
 
     // List fills rest
     listBox_.setBounds(r);
@@ -634,6 +637,50 @@ void PatchBrowserPanel::doRemove()
                 safe->statusLabel_.setText(n == 1 ? "Removed: " + onlyName
                                                   : "Removed " + juce::String(n) + " patches",
                                            juce::dontSendNotification);
+            }
+            delete alert;
+        }), true);
+}
+
+// Permanently commits the current editor patch to a real hardware program slot.
+// Unlike every other load/save path here (which only ever touches the file-based
+// library or the hardware scratchpad, slot 99), this writes non-volatile synth
+// memory — the confirm dialog below is the only guard against overwriting a
+// patch the user cares about.
+void PatchBrowserPanel::doStore()
+{
+    if (!getCurrentSysex) return;
+
+    auto* alert = new juce::AlertWindow("Store to Hardware Slot",
+        "Permanently writes the current patch into synth program memory at the "
+        "slot you choose, overwriting whatever is stored there now. This cannot "
+        "be undone from XpandrLink.\n\n"
+        "Slots 0-98 only - 99 is XpandrLink's scratchpad, used for every "
+        "load and audition.",
+        juce::MessageBoxIconType::WarningIcon);
+    alert->addTextEditor("slot", "0", "Slot (0-98):");
+    alert->addButton("Store", 1, juce::KeyPress(juce::KeyPress::returnKey));
+    alert->addButton("Cancel", 0, juce::KeyPress(juce::KeyPress::escapeKey));
+
+    juce::Component::SafePointer<PatchBrowserPanel> safe(this);
+    alert->enterModalState(true,
+        juce::ModalCallbackFunction::create([safe, alert](int result) {
+            if (!safe) { delete alert; return; }
+            if (result == 1)
+            {
+                int slot = alert->getTextEditorContents("slot").getIntValue();
+                if (slot < 0 || slot > 98)
+                {
+                    safe->statusLabel_.setText("Store failed - slot must be 0-98",
+                                               juce::dontSendNotification);
+                }
+                else
+                {
+                    safe->getCurrentSysex();  // refresh MidiEngine's cache from the live editor
+                    safe->midiEngine_.storePatchToSlot(slot);
+                    safe->statusLabel_.setText("Stored to slot " + juce::String(slot),
+                                               juce::dontSendNotification);
+                }
             }
             delete alert;
         }), true);

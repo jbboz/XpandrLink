@@ -154,6 +154,17 @@ public:
     // Call this before starting a bank send to silence any held notes.
     void sendAllNotesOff();
 
+    // PERMANENTLY commits the cached patch to a real hardware program slot (0-99).
+    // Unlike sendPatchToSynth() (which always redirects to the scratchpad slot,
+    // Oberheim::kScratchpadProgram, so ordinary load/audition/randomize/morph never
+    // touches the user's other patches), this is the one deliberate, explicit exception:
+    // it dumps the patch stamped to `slot`, activates it, then sends the STORE commit
+    // (F0 10 [id] 07 [slot] F7) that writes it into non-volatile patch memory at that
+    // slot, then re-requests the slot to confirm. No-op if no patch is cached.
+    // Callers must confirm with the user before calling this — it overwrites real
+    // hardware memory with no undo.
+    void storePatchToSlot(int slot);
+
     // Master command buttons (nav bar).
     void sendMidiMute();   // Master -> MIDI -> Mute  (page-select 0B 1B 00)
     void sendTuneAll();    // Master -> Tune -> All   (MIDI Tune Request F6 = "tune all")
