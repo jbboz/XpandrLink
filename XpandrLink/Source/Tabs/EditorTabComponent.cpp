@@ -170,6 +170,26 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
                 nullptr);
         });
 
+    // One-time notice: every load/audition/randomize/morph is redirected to hardware
+    // program slot 99 (see MidiEngine::sendPatchToSynth) so slots 0-98 are never
+    // touched — but slot 99 itself is a real, permanent overwrite each time.
+    if (appProperties && !appProperties->getBoolValue("ScratchpadNoticeShown", false)) {
+        appProperties->setValue("ScratchpadNoticeShown", true);
+        appProperties->save();
+        juce::MessageManager::callAsync([] {
+            juce::NativeMessageBox::showMessageBoxAsync(
+                juce::MessageBoxIconType::InfoIcon,
+                "Patch Scratchpad - Slot 99",
+                "XpandrLink uses hardware program slot 99 as a scratchpad for "
+                "every patch you load, audition, randomize, or morph.\n\n"
+                "Slot 99 is overwritten each time this happens. Your other 99 "
+                "program slots (0-98) are never touched during normal editing.\n\n"
+                "If you have a patch you want to keep in slot 99, move or save "
+                "it before using XpandrLink.",
+                nullptr);
+        });
+    }
+
     // addListener before loadSettings() so that the "Connected Input/Output" status
     // messages from setMidiInput/setMidiOutput are visible in the log panel.
     midiEngine.addListener(this);
