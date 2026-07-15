@@ -34,9 +34,10 @@ are never overwritten by browsing or editing.
 
 ## Download
 
-**[Download for macOS](https://github.com/jbboz/XpandrLink/releases/download/v1.0.0-beta.1/XpandrLink-v1.0.0-beta.1-macOS.zip)**
-&nbsp;·&nbsp;
-**[Download for Windows](https://github.com/jbboz/XpandrLink/releases/download/v1.0.0-beta.1/XpandrLink-v1.0.0-beta.1-Windows.zip)**
+### 📦 [**Get the latest release →**](../../releases)
+
+macOS universal (Standalone / AU / VST3) and Windows x64 (Standalone / VST3). Each release's
+page has direct download links for both platforms plus first-launch instructions.
 
 | Platform | Formats | Requirements |
 |---|---|---|
