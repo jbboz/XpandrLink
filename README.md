@@ -64,6 +64,11 @@ run the script itself, macOS will ask you to approve it (the same one-time Gatek
 prompt below, just for the script instead of the app) — after that, XpandrLink opens and
 loads normally everywhere.
 
+Double-click doesn't always work for `.command` files — depending on your macOS version,
+Finder may open it in a text editor instead of running it, or refuse to run it at all. If
+that happens: open **Terminal**, drag `macsetup_XpandrLink.command` from Finder into the
+Terminal window (this fills in its full path), then press **Return**.
+
 If you'd rather not run the script, you can still open the Standalone app manually:
 
 1. Open XpandrLink.app as usual. macOS will refuse to launch it ("Apple could not verify
