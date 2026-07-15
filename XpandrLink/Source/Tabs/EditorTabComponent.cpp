@@ -580,11 +580,23 @@ void EditorTabComponent::onParameterChangedFromHardware(int page, int paramCol, 
     }
 }
 
-void EditorTabComponent::onSynthInputDetected(const juce::String& /*portName*/)
+void EditorTabComponent::onSynthInputDetected(const juce::String& portName)
 {
     juce::Component::SafePointer<EditorTabComponent> safeThis(this);
-    juce::MessageManager::callAsync([safeThis] {
+    juce::MessageManager::callAsync([safeThis, portName] {
         if (safeThis == nullptr) return;
+
+        // Auto-select a MIDI output the first time the synth is detected, if none is
+        // set yet (fresh install, or a previously-saved output is no longer connected).
+        // MidiEngine::chooseAutoOutput only returns a name when it's unambiguous -- see
+        // its declaration for the guess-avoidance rules.
+        if (!safeThis->midiEngine.isMidiOutputOpen())
+        {
+            auto chosen = MidiEngine::chooseAutoOutput(portName, safeThis->midiEngine.getMidiOutputs());
+            if (chosen.isNotEmpty())
+                safeThis->midiEngine.setMidiOutput(chosen);
+        }
+
         safeThis->saveSettings();
         if (safeThis->midiSettingsPanel_)
             safeThis->midiSettingsPanel_->refresh();   // light the SYNTH presence LED

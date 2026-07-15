@@ -559,6 +559,16 @@ bool MidiEngine::shouldCoalesceModAmount(juce::uint32 now, juce::uint32 lastSend
     return elapsed >= 0 && elapsed <= throttleMs;
 }
 
+juce::String MidiEngine::chooseAutoOutput(const juce::String& detectedInputName,
+                                           const juce::StringArray& availableOutputs)
+{
+    if (availableOutputs.contains(detectedInputName))
+        return detectedInputName;
+    if (availableOutputs.size() == 1)
+        return availableOutputs[0];
+    return {};
+}
+
 void MidiEngine::sendModAmountNow(int destIndex, int idSource, int newAmount)
 {
     int absAmt = std::abs(newAmount);

@@ -5,6 +5,7 @@
 #include "FullModMatrixSlotTest.h"
 #include "IDSourceTrackingTest.h"
 #include "InitPatchLoadTest.h"
+#include "MidiOutputAutoSelectTest.h"
 #include "ModAmountCoalesceTest.h"
 #include "ModEditDecodeTest.h"
 #include "PatchRandomizerSafetyTest.h"

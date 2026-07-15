@@ -30,7 +30,9 @@ are never overwritten by browsing or editing.
 - **DAW automation** — record and draw automation lanes for any parameter; the plugin
   streams changes to the synth over its own direct MIDI connection, bypassing DAW SysEx
   filtering (yes, it works in Ableton Live); the current patch restores with your project
-- **Zero-config MIDI** — the synth's port and SysEx device ID are auto-detected
+- **Zero-config MIDI** — the synth's input port and SysEx device ID are auto-detected; the
+  output auto-selects too whenever it's unambiguous (a single MIDI interface, or one whose
+  output shares the input's name) — otherwise pick it once in the MIDI pane
 
 ## Download
 

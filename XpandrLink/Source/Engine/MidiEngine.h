@@ -251,6 +251,16 @@ public:
     // immediately). Wraparound-safe signed subtraction, same pattern as handleModRouting.
     static bool shouldCoalesceModAmount(juce::uint32 now, juce::uint32 lastSendTime, int throttleMs);
 
+    // Public for unit testing: picks a MIDI output to auto-select once the synth's input
+    // port is detected, when no output is set yet. Only guesses when there's a single,
+    // unambiguous candidate -- an output sharing the detected input's name (the common
+    // case: an interface exposes matching names for its IN/OUT pair of a given port), or
+    // the only output that exists at all. Returns an empty string when the choice would
+    // be a guess (multiple outputs, none name-matching), since sending SysEx to the wrong
+    // device is worse than asking the user to pick.
+    static juce::String chooseAutoOutput(const juce::String& detectedInputName,
+                                          const juce::StringArray& availableOutputs);
+
     // CC automation table: map CC numbers (0-127) to Xpander parameter IDs.
     // Incoming CC from non-synth inputs is scaled to the param range and broadcast
     // as a parameter-from-hardware event (does NOT send to synth — same as HW knob path).
