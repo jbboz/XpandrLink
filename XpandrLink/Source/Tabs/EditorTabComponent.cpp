@@ -603,7 +603,7 @@ void EditorTabComponent::onSynthInputDetected(const juce::String& portName)
         // automatically instead). Needs an output to actually reach the synth, which
         // the auto-select above may have just supplied.
         if (safeThis->midiEngine.isMidiOutputOpen())
-            safeThis->midiEngine.sendDisplayMessage("XPANDRLINK V" JucePlugin_VersionString);
+            safeThis->midiEngine.sendDisplayMessage("XPANDRLINK V" XPANDRLINK_RELEASE_LABEL);
 
         safeThis->saveSettings();
         if (safeThis->midiSettingsPanel_)
@@ -1063,10 +1063,11 @@ void EditorTabComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colour(0xff121212));
     g.fillRect(navR.getX(), navR.getY(), navR.getWidth(), 2);
 
-    // Version string in nav bar (left).
+    // Version string in nav bar (left). Widened from 60->110px: the release label can
+    // carry a pre-release suffix (e.g. "v1.0.0-beta.1"), longer than a bare "v1.0.0".
     g.setFont(juce::Font(juce::FontOptions(9.5f)));
     g.setColour(theme.textHeader.withAlpha(0.25f));
-    g.drawText("v" JucePlugin_VersionString, navR.withTrimmedLeft(8).withWidth(60),
+    g.drawText("v" XPANDRLINK_RELEASE_LABEL, navR.withTrimmedLeft(8).withWidth(110),
                juce::Justification::centredLeft);
 }
 

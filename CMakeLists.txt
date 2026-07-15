@@ -6,6 +6,13 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
 
 project(XpandrLink VERSION 1.0.0 LANGUAGES C CXX)
 
+# Human-facing release label (nav bar + synth-greeting display) -- kept separate from
+# the strict numeric PROJECT_VERSION above, which drives AU/VST3 plugin metadata and
+# can't carry a pre-release suffix some hosts won't parse. Update this to match the
+# current GitHub release tag; PROJECT_VERSION only needs to change for an actual
+# version bump, not every pre-release tag.
+set(XPANDRLINK_RELEASE_LABEL "1.0.0-beta.1")
+
 # JUCE lives as a sibling directory (same setup as the previous Projucer config).
 add_subdirectory(../JUCE "${CMAKE_BINARY_DIR}/JUCE" EXCLUDE_FROM_ALL)
 
@@ -95,6 +102,7 @@ target_compile_definitions(XpandrLink
         JUCE_DISPLAY_SPLASH_SCREEN=0
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
+        XPANDRLINK_RELEASE_LABEL="${XPANDRLINK_RELEASE_LABEL}"
 )
 
 target_link_libraries(XpandrLink
