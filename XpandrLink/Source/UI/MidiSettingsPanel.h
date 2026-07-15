@@ -99,29 +99,6 @@ public:
         };
         addAndMakeVisible(modelBtn_);
 
-        displayLabel_.setText("DISPLAY", juce::dontSendNotification);
-        displayLabel_.setJustificationType(juce::Justification::centredLeft);
-        displayLabel_.setColour(juce::Label::textColourId, theme.textLabel);
-        displayLabel_.setFont(ThemeData::getVfdFont(11.0f));
-        addAndMakeVisible(displayLabel_);
-
-        // Free-text field sent verbatim to the synth's own front-panel VFD (uppercased
-        // and space-padded to 80 chars by MidiEngine::sendDisplayMessage).
-        displayText_.setColour(juce::TextEditor::backgroundColourId, juce::Colour(0xff1a1a1a));
-        displayText_.setColour(juce::TextEditor::textColourId, ThemeData::getHardwareTheme().textValue);
-        displayText_.setColour(juce::TextEditor::outlineColourId, ThemeData::getHardwareTheme().vfdBorder);
-        displayText_.setTextToShowWhenEmpty("Text for synth display...",
-                                            ThemeData::getHardwareTheme().textLabel.withAlpha(0.5f));
-        addAndMakeVisible(displayText_);
-
-        sendDisplayBtn_.setButtonText("SEND");
-        sendDisplayBtn_.setLookAndFeel(&hwLF_);
-        sendDisplayBtn_.setTooltip("Send this text to the synth's front-panel display.");
-        sendDisplayBtn_.onClick = [this] {
-            midiEngine_.sendDisplayMessage(displayText_.getText());
-        };
-        addAndMakeVisible(sendDisplayBtn_);
-
         refresh();
     }
 
@@ -141,7 +118,6 @@ public:
     {
         refreshBtn_.setLookAndFeel(nullptr);
         modelBtn_.setLookAndFeel(nullptr);
-        sendDisplayBtn_.setLookAndFeel(nullptr);
     }
 
     void refresh()
@@ -237,14 +213,6 @@ public:
         modelLabel_.setBounds(modelRow.removeFromLeft(46));
         modelRow.removeFromLeft(4);
         modelBtn_.setBounds(modelRow.removeFromLeft(90));
-
-        right.removeFromTop(8);
-        auto displayRow = right.removeFromTop(26);
-        displayLabel_.setBounds(displayRow.removeFromLeft(46));
-        displayRow.removeFromLeft(4);
-        sendDisplayBtn_.setBounds(displayRow.removeFromRight(60));
-        displayRow.removeFromRight(4);
-        displayText_.setBounds(displayRow);
     }
 
 private:
@@ -291,9 +259,8 @@ private:
     MidiEngine&  midiEngine_;
     juce::StringArray availableInputs_;
 
-    juce::Label          headerLabel_, outputLabel_, idLabel_, statusLabel_, modelLabel_, displayLabel_;
-    juce::TextButton     refreshBtn_, modelBtn_, sendDisplayBtn_;
-    juce::TextEditor     displayText_;
+    juce::Label          headerLabel_, outputLabel_, idLabel_, statusLabel_, modelLabel_;
+    juce::TextButton     refreshBtn_, modelBtn_;
     juce::ListBox        inputList_;
     juce::ComboBox       outputBox_;
     SynthLed             synthLed_;
