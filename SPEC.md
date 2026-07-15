@@ -10,7 +10,7 @@ For forward-looking work, see [ROADMAP.md](ROADMAP.md).
 
 **XpandrLink** is a real-time, bi-directional editor for the **Oberheim Xpander** and **Matrix-12** synthesizers. It exposes all 226 parameters of a single patch and keeps the editor UI, hardware front panel, MIDI controllers, and DAW automation in sync.
 
-It is a C++/JUCE port of the original Windows/.NET [XplorerEditor](https://github.com/xplorer2716/XplorerEditor) by Pascal Schmitt, whose source remains the authoritative reference for hardware protocol nuances not covered below (see the quick-index in §9).
+It is a C++/JUCE port of the original Windows/.NET [XplorerEditor](https://github.com/xplorer2716/XplorerEditor), whose source remains the authoritative reference for hardware protocol nuances not covered below (see the quick-index in §9).
 
 ---
 
@@ -344,7 +344,7 @@ CMake replaces the legacy Projucer flow entirely. `XplorerMac.jucer`, `Builds/Ma
 | Resource | Purpose |
 |---|---|
 | [github.com/xplorer2716/XplorerEditor](https://github.com/xplorer2716/XplorerEditor) | Upstream C# project — original protocol source |
-| [github.com/xplorer2716/OberheimXpanderMidiSpec](https://github.com/xplorer2716/OberheimXpanderMidiSpec) | Oberheim SysEx specification |
+| [github.com/xplorer2716/OberheimXpanderMidiSpec](https://github.com/xplorer2716/OberheimXpanderMidiSpec) | Oberheim SysEx specification — also vendored at [`Reference/`](Reference/) for archival purposes |
 | [juce.com](https://juce.com/) | JUCE framework |
 | `XpandrLink-User-Guide.md` | End-user feature guide |
 | `DESIGN.md` | UI/visual spec (hardware VFD theme tokens) |
