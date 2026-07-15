@@ -46,6 +46,34 @@ Install plugins to the usual locations (`/Library/Audio/Plug-Ins/Components` for
 `.../VST3` for VST3). Connect MIDI IN **and** OUT between your interface and the synth —
 the editor auto-detects the port and device ID from the first SysEx it receives.
 
+### First launch on macOS
+
+These builds aren't code-signed with an Apple Developer ID, so Gatekeeper blocks them
+on first launch — for the Standalone app *and* the AU/VST3 (plugins don't even get an
+interactive prompt; your DAW just silently fails to load them, with no dialog to click
+through). This is expected.
+
+The download includes **`macsetup_XpandrLink.command`** — double-click it once, in the
+same folder as the app/plugin, and it clears the block from everything at once, including
+the AU/VST3 (there's no GUI-based fix for those — the script is it). The first time you
+run the script itself, macOS will ask you to approve it (the same one-time Gatekeeper
+prompt below, just for the script instead of the app) — after that, XpandrLink opens and
+loads normally everywhere.
+
+If you'd rather not run the script, you can still open the Standalone app manually:
+
+1. Open XpandrLink.app as usual. macOS will refuse to launch it ("Apple could not verify
+   this app is free of malware").
+2. Open **System Settings → Privacy & Security**, then go to the **Security** section.
+3. You'll see a note that XpandrLink was blocked, with an **Open Anyway** button — this
+   button only appears for about an hour after step 1, so do this soon after; if it's
+   gone, just try opening the app again to bring it back.
+4. Click **Open Anyway**, then enter your login password to confirm.
+
+After that, macOS remembers the exception and it opens normally from then on — this is
+a one-time step per machine. The AU/VST3 have no equivalent manual path; run the script
+for those, then rescan plugins in your DAW.
+
 Full instructions: **[User Guide](XpandrLink-User-Guide.md)**.
 
 ## Building from source
