@@ -88,6 +88,22 @@ void FullModMatrixPanel::decrementIdSourceAfterRemove(int destIdx, int removedId
             s.idSource--;
 }
 
+void FullModMatrixPanel::compactSlots()
+{
+    std::vector<ModSlot> active;
+    active.reserve(slots.size());
+    for (const auto& s : slots)
+        if (s.active) active.push_back(s);
+
+    slots.assign(20, ModSlot{});
+    for (int i = 0; i < 20; ++i) slots[(size_t)i].slotIndex = i + 1;
+    for (size_t i = 0; i < active.size() && i < slots.size(); ++i)
+    {
+        slots[i] = active[i];
+        slots[i].slotIndex = (int)i + 1;
+    }
+}
+
 void FullModMatrixPanel::removeEntry(int srcIdx, int destIdx)
 {
     for (auto& s : slots)
@@ -100,6 +116,7 @@ void FullModMatrixPanel::removeEntry(int srcIdx, int destIdx)
             s.srcName = "";
             s.dstName = "";
             s.amount  = 0;
+            compactSlots();
             repaint();
             return;
         }
@@ -198,6 +215,7 @@ void FullModMatrixPanel::removeAtSlot(int destIdx, int idSource)
             s.dstName = "";
             s.amount  = 0;
             s.quantize = false;
+            compactSlots();
             repaint();
             return;
         }
@@ -205,7 +223,17 @@ void FullModMatrixPanel::removeAtSlot(int destIdx, int idSource)
 
 void FullModMatrixPanel::getCurrentModBytes(std::array<uint8_t, 60>& out) const
 {
-    out.fill(0);
+    // Unused slots use the hardware convention source=0x1F, dest=0x3F (never zero --
+    // a zero-filled slot decodes as a real, silent ENV1->VCO1_FRQ routing on the
+    // synth, not "empty"; see the Init Patch mod-matrix corruption fix and the same
+    // convention already used by PatchRandomizer::randomizeModBytes).
+    for (int i = 0; i < 20; ++i)
+    {
+        int base = i * 3;
+        out[(size_t)base]     = 0x1F;
+        out[(size_t)base + 1] = 0x00;
+        out[(size_t)base + 2] = 0x3F;
+    }
     for (int i = 0; i < 20 && i < (int)slots.size(); ++i)
     {
         const auto& s = slots[i];

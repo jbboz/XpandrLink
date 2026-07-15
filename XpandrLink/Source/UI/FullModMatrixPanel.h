@@ -69,6 +69,16 @@ private:
     // Returns { rx, sw, aw, dw, cw } — positions/widths within one column.
     std::tuple<float,float,float,float,float> cellLayout(float colW, float cx) const;
 
+    // Compacts active entries down to the front of the 20-slot grid, closing any gap
+    // left by a removal, so the visual layout (and the wire-order encoding in
+    // getCurrentModBytes) stays contiguous. Purely a display/encoding-order concern:
+    // it only moves entries between grid *positions* -- it never changes an entry's
+    // srcIdx, destIdx, amount, or idSource (the field that actually addresses hardware
+    // live-edit commands), and relative order between entries sharing a destination is
+    // preserved, so per-destination idSource re-derivation on a future patch decode
+    // stays correct. Call after any removal.
+    void compactSlots();
+
     struct ModSlot {
         int slotIndex = 0;
         bool active = false;
