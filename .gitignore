@@ -23,3 +23,10 @@ out/
 *.opensdf
 *.suo
 *.user
+
+# Local dev-agent memory (Claude Code) -- not part of the public project;
+# kept locally only for session continuity, same as it was in the old
+# private XplorerMac repo this project was curated from.
+/CLAUDE.md
+/CLAUDE-MEMORY.md
+/.claude/
