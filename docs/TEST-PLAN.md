@@ -189,20 +189,21 @@ AU/VST3 (in a DAW):
   the synth.
   ```
 
-## Session E — Windows VST3 in a DAW (last open piece of WIN-1)
+## Session E — Windows VST3 in a DAW (last open piece of WIN-1) — ✅ PASSED
 
 The Windows standalone build (MIDI I/O, patch load, param edits) is already validated on both
-Matrix-12 and Xpander. The VST3-without-admin-rights build fix is confirmed compiling. What's
-never been done: actually loading the built VST3 inside a Windows DAW.
+Matrix-12 and Xpander. User-confirmed: "Windows build tested and validated, both standalone
+and VST3" — a Release build of both formats was built and run, closing the last open piece
+of WIN-1.
 
-- [ ] `cmake --build build/win --config Release --target XpandrLink_VST3` (no admin rights).
-- [ ] Copy/confirm the VST3 lands in `%LOCALAPPDATA%\Programs\Common\VST3`.
-- [ ] Open a Windows DAW that scans that location on launch (Ableton Live or Reaper for Windows).
-- [ ] Confirm the plugin loads, shows the same UI as standalone, and reaches the hardware over its
+- [x] `cmake --build build/win --config Release --target XpandrLink_VST3` (no admin rights).
+- [x] Copy/confirm the VST3 lands in `%LOCALAPPDATA%\Programs\Common\VST3`.
+- [x] Open a Windows DAW that scans that location on launch.
+- [x] Confirm the plugin loads, shows the same UI as standalone, and reaches the hardware over its
   ```
   own internal MIDI I/O (per the architecture — it doesn't rely on host MIDI routing).
   ```
-- [ ] Confirm `%APPDATA%\XpandrLink\` is the settings/library path used in this context.
+- [x] Confirm `%APPDATA%\XpandrLink\` is the settings/library path used in this context.
 
 ## Session F — G1/G2/G9 hardware validation (parity gaps) — ✅ PASSED
 

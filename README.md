@@ -74,6 +74,28 @@ After that, macOS remembers the exception and it opens normally from then on —
 a one-time step per machine. The AU/VST3 have no equivalent manual path; run the script
 for those, then rescan plugins in your DAW.
 
+### First launch on Windows
+
+Same situation, different mechanism: these builds aren't signed with a code-signing
+certificate, so Windows marks the downloaded files and Microsoft Defender SmartScreen
+blocks them the first time you try to run or load one.
+
+The download includes **`winsetup_XpandrLink.bat`** — double-click it once, in the same
+folder as `XpandrLink.exe`/`XpandrLink.vst3`, and it clears the block from both at once
+(it runs `Unblock-File` on everything in that folder). Running the script itself will
+trigger one SmartScreen prompt — click **More info**, then **Run anyway** — after that,
+XpandrLink.exe runs and the VST3 loads in your DAW with no further prompts.
+
+If you'd rather not run the script, the manual equivalent for the Standalone app:
+
+1. Double-click XpandrLink.exe. You'll see **"Windows protected your PC."**
+2. Click **More info**.
+3. Click **Run anyway**.
+
+For the VST3 (no run prompt like the app gets — a DAW just won't load it): right-click
+`XpandrLink.vst3` → **Properties** → check **Unblock** at the bottom of the General tab
+→ **OK**, then rescan plugins in your DAW.
+
 Full instructions: **[User Guide](XpandrLink-User-Guide.md)**.
 
 ## Building from source
