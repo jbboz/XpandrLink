@@ -4,8 +4,9 @@
 
   Presents two patch slots (A = current patch at open time, B = user-loaded file)
   and a 0-100 morph slider. Every slider move calls onApply with the interpolated
-  param map; EditorTabComponent encodes + sends it to scratchpad 99.
-  Undo reverts to Patch A (the pre-morph patch); Apply keeps the current morphed state.
+  param map; EditorTabComponent encodes + sends it to scratchpad 99 -- already live
+  on the hardware as the slider moves, so there's no separate confirm/commit step.
+  Undo reverts to Patch A (the pre-morph patch).
 */
 #pragma once
 #include <JuceHeader.h>
@@ -62,7 +63,8 @@ public:
         morphSlider_.setSliderStyle(juce::Slider::LinearHorizontal);
         morphSlider_.setRange(0.0, 100.0, 1.0);
         morphSlider_.setValue(0.0, juce::dontSendNotification);
-        morphSlider_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 44, 22);
+        morphSlider_.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 22);
+        morphSlider_.setTextValueSuffix(" %");
         morphSlider_.setColour(juce::Slider::trackColourId,          theme.knobIndicatorActive.withAlpha(0.6f));
         morphSlider_.setColour(juce::Slider::thumbColourId,          theme.knobIndicatorActive);
         morphSlider_.setColour(juce::Slider::backgroundColourId,     juce::Colour(0xff2a2a2a));
@@ -81,11 +83,6 @@ public:
         undoBtn_.onClick = [this] { doUndo(); };
         addAndMakeVisible(undoBtn_);
 
-        applyBtn_.setButtonText("APPLY");
-        applyBtn_.setLookAndFeel(&lf_);
-        applyBtn_.onClick = [this] { applyMorph(); };  // re-fires current state as confirmation
-        addAndMakeVisible(applyBtn_);
-
         hintLabel_.setText("Load a patch B file to begin morphing", juce::dontSendNotification);
         hintLabel_.setColour(juce::Label::textColourId, theme.textLabel.withAlpha(0.4f));
         hintLabel_.setFont(juce::Font(juce::FontOptions(12.0f)));
@@ -97,7 +94,6 @@ public:
     {
         loadBBtn_.setLookAndFeel(nullptr);
         undoBtn_.setLookAndFeel(nullptr);
-        applyBtn_.setLookAndFeel(nullptr);
     }
 
     // Call this when the panel becomes visible to snapshot the current patch as A.
@@ -187,12 +183,9 @@ public:
         hintLabel_.setBounds(area.removeFromTop(20));
         area.removeFromTop(8);
 
-        // Row 6: action buttons
+        // Row 6: action button (just Undo -- Apply was removed, see doUndo/applyMorph)
         auto btnRow = area.removeFromTop(28);
-        int bw = (btnRow.getWidth() - 8) / 2;
-        undoBtn_.setBounds(btnRow.removeFromLeft(bw));
-        btnRow.removeFromLeft(8);
-        applyBtn_.setBounds(btnRow);
+        undoBtn_.setBounds(btnRow.withSizeKeepingCentre(juce::jmin(btnRow.getWidth(), 160), btnRow.getHeight()));
     }
 
 private:
@@ -271,7 +264,7 @@ private:
     HardwareButtonLookAndFeel lf_;  // must outlive buttons
 
     juce::Label      titleLabel_, patchALabel_, patchBLabel_, hintLabel_;
-    juce::TextButton loadBBtn_, undoBtn_, applyBtn_;
+    juce::TextButton loadBBtn_, undoBtn_;
     juce::Slider     morphSlider_;
 
     bool hasPatchA_ = false;
