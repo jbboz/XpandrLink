@@ -597,6 +597,14 @@ void EditorTabComponent::onSynthInputDetected(const juce::String& portName)
                 safeThis->midiEngine.setMidiOutput(chosen);
         }
 
+        // One-time welcome greeting on the synth's own front-panel display, the first
+        // time it's confirmed present each session (matches the C# reference's
+        // SendGreetingsToSynth, minus its manual About-box trigger -- this fires
+        // automatically instead). Needs an output to actually reach the synth, which
+        // the auto-select above may have just supplied.
+        if (safeThis->midiEngine.isMidiOutputOpen())
+            safeThis->midiEngine.sendDisplayMessage("XPANDRLINK V" JucePlugin_VersionString);
+
         safeThis->saveSettings();
         if (safeThis->midiSettingsPanel_)
             safeThis->midiSettingsPanel_->refresh();   // light the SYNTH presence LED
