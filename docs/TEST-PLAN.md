@@ -391,6 +391,7 @@ hardware before this branch goes anywhere near `main`. Do items 1 and 2 first �
 the load-bearing ones; 3-6 are quick visual/functional checks.
 
 ### 1. Mod-matrix unused-slot sentinel fix — HIGH PRIORITY, same bug class as the Init
+
 Patch corruption fix (Session I above)
 
 `getCurrentModBytes()` was zero-filling unused mod-matrix slots instead of using the
@@ -398,61 +399,72 @@ hardware's sentinel (`src=0x1F`, `dst=0x3F`) on every Save Patch / Store-to-hard
 from the live editor — the same mechanism that caused "maximum of 20 modulations per
 voice" errors in Session I, but live in an ongoing code path, not one static file.
 
-- [ ] Load a patch with only 1-2 active mod-matrix routings (e.g. Init Patch).
-- [ ] Save it to a file, or Store it to a spare hardware slot.
-- [ ] Reload that saved/stored patch. Confirm it still shows only the original 1-2
+- [x] Load a patch with only 1-2 active mod-matrix routings (e.g. Init Patch).
+- [x] Save it to a file, or Store it to a spare hardware slot.
+- [x] Reload that saved/stored patch. Confirm it still shows only the original 1-2
   routings — no phantom extras.
-- [ ] With that reloaded patch active, try adding a new mod-matrix routing from the
+- [x] With that reloaded patch active, try adding a new mod-matrix routing from the
   editor. Confirm it succeeds (no "maximum of 20 modulations" error). This is the
   direct repro for the bug class — if it fails here, the fix didn't take.
-- [ ] Repeat once more after a second save/reload round-trip, to rule out the corruption
+- [x] Repeat once more after a second save/reload round-trip, to rule out the corruption
   compounding across multiple saves.
 
 ### 2. Mod-matrix grid restacking (the gap-closing feature)
 
-- [ ] Add 3-4 mod-matrix routings to different destinations from the editor's Mod Matrix
+- [x] Add 3-4 mod-matrix routings to different destinations from the editor's Mod Matrix
   pane. Note their grid positions.
-- [ ] Remove one from the middle (not the first or last). Confirm the entries after it
+- [x] Remove one from the middle (not the first or last). Confirm the entries after it
   shift down to close the gap, rather than leaving a blank cell.
-- [ ] Repeat the same removal from the hardware's own front panel instead of the editor.
+- [x] Repeat the same removal from the hardware's own front panel instead of the editor.
   Confirm the editor's grid still compacts (mirrors the hardware-initiated delete).
-- [ ] After compacting, add a new routing and confirm it fills the front of the grid
+- [x] After compacting, add a new routing and confirm it fills the front of the grid
   correctly, and edit/remove a couple of the remaining ones to confirm nothing's
   addressing the wrong hardware slot (the actual hazard class from the session-55–61
   mod-matrix sagas, even though this change was designed not to touch idSource at all).
 
 ### 3. MIDI output auto-select
 
+**Note (found during testing): a fresh install with no saved settings has zero MIDI
+inputs enabled by default, and that's deliberately unchanged by this branch (no
+auto-enable-all-inputs) -- the app has to actually hear the synth's SysEx before it can
+auto-detect anything, on the input OR output side.** Enabling an input is a required
+manual step here, not optional -- without it, nothing downstream (SYNTH LED, output
+auto-select, the greeting) can ever fire.
+
 - [ ] Delete `~/Library/Application Support/XpandrLink/XpandrLink.settings` (or just clear
-  the saved MIDI output) to simulate a fresh install. Launch the app with the synth
-  connected. Confirm the output auto-selects once the synth is detected (no manual pick
-  needed), assuming your interface exposes a single output or one that shares the synth
-  input's port name.
+  the saved MIDI output) to simulate a fresh install. Launch the app.
+- [ ] In the MIDI pane, manually check the box for your synth's input port (this step is
+  required -- a fresh install starts with no inputs enabled).
+- [ ] Turn a knob or interact with the synth's front panel so it sends some SysEx. Confirm
+  the SYNTH LED lights up.
+- [ ] With the LED lit, confirm the output auto-selected (no manual pick needed) --
+  assuming your interface exposes a single output, or one that shares the synth input's
+  port name.
 - [ ] If you have multiple unrelated MIDI outputs available, confirm it does NOT guess —
   output should stay unset until you pick one manually.
 - [ ] Confirm a previously manually-chosen output is never silently overridden by this.
 
 ### 4. Welcome greeting on connect
 
-- [ ] Launch the app with the synth connected (or connect it after launch). Confirm the
+- [x] Launch the app with the synth connected (or connect it after launch). Confirm the
   synth's own front-panel VFD shows `XPANDRLINK V1.0.0-BETA.1` once, shortly after
   connecting.
-- [ ] Confirm it only fires once per session — reconnecting/re-triggering SysEx later in
+- [x] Confirm it only fires once per session — reconnecting/re-triggering SysEx later in
   the same session shouldn't re-send it.
-- [ ] Confirm the display returns to normal (patch name, etc.) as soon as you interact
+- [x] Confirm the display returns to normal (patch name, etc.) as soon as you interact
   with a function on the synth — no dedicated "OFF" needed, matching the G1 finding.
 
 ### 5. Version label
 
-- [ ] Confirm the nav bar shows `v1.0.0-beta.1` (not truncated, not just `1.0.0`).
+- [x] Confirm the nav bar shows `v1.0.0-beta.1` (not truncated, not just `1.0.0`).
 - [ ] If convenient, check the AU/VST3 as listed in a DAW's plugin browser — should still
   show a clean `1.0.0` (the plugin-metadata version is deliberately unaffected).
 
 ### 6. Removed/changed UI (quick visual pass)
 
-- [ ] MIDI pane: confirm the DISPLAY text field + SEND button are gone, and the panel
+- [x] MIDI pane: confirm the DISPLAY text field + SEND button are gone, and the panel
   layout still looks right without that row.
-- [ ] Morph pane: confirm the slider shows a `%` value, and only one button (UNDO)
+- [x] Morph pane: confirm the slider shows a `%` value, and only one button (UNDO)
   remains in the action row, centered, not stretched oddly.
 
 ---
@@ -461,4 +473,3 @@ voice" errors in Session I, but live in an ongoing code path, not one static fil
 
 After each session, update [ROADMAP.md](../ROADMAP.md) — remove the row for anything fully
 validated; narrow the "what needs to happen" text for anything partially validated.
-
