@@ -384,6 +384,79 @@ asset. See [ROADMAP.md](../ROADMAP.md) for detail.
 
 ---
 
+## Session J — `midi-output-autoselect` branch (unmerged; unvalidated)
+
+Everything on the local `midi-output-autoselect` branch, not yet pushed. Test with real
+hardware before this branch goes anywhere near `main`. Do items 1 and 2 first — they're
+the load-bearing ones; 3-6 are quick visual/functional checks.
+
+### 1. Mod-matrix unused-slot sentinel fix — HIGH PRIORITY, same bug class as the Init
+Patch corruption fix (Session I above)
+
+`getCurrentModBytes()` was zero-filling unused mod-matrix slots instead of using the
+hardware's sentinel (`src=0x1F`, `dst=0x3F`) on every Save Patch / Store-to-hardware-slot
+from the live editor — the same mechanism that caused "maximum of 20 modulations per
+voice" errors in Session I, but live in an ongoing code path, not one static file.
+
+- [ ] Load a patch with only 1-2 active mod-matrix routings (e.g. Init Patch).
+- [ ] Save it to a file, or Store it to a spare hardware slot.
+- [ ] Reload that saved/stored patch. Confirm it still shows only the original 1-2
+  routings — no phantom extras.
+- [ ] With that reloaded patch active, try adding a new mod-matrix routing from the
+  editor. Confirm it succeeds (no "maximum of 20 modulations" error). This is the
+  direct repro for the bug class — if it fails here, the fix didn't take.
+- [ ] Repeat once more after a second save/reload round-trip, to rule out the corruption
+  compounding across multiple saves.
+
+### 2. Mod-matrix grid restacking (the gap-closing feature)
+
+- [ ] Add 3-4 mod-matrix routings to different destinations from the editor's Mod Matrix
+  pane. Note their grid positions.
+- [ ] Remove one from the middle (not the first or last). Confirm the entries after it
+  shift down to close the gap, rather than leaving a blank cell.
+- [ ] Repeat the same removal from the hardware's own front panel instead of the editor.
+  Confirm the editor's grid still compacts (mirrors the hardware-initiated delete).
+- [ ] After compacting, add a new routing and confirm it fills the front of the grid
+  correctly, and edit/remove a couple of the remaining ones to confirm nothing's
+  addressing the wrong hardware slot (the actual hazard class from the session-55–61
+  mod-matrix sagas, even though this change was designed not to touch idSource at all).
+
+### 3. MIDI output auto-select
+
+- [ ] Delete `~/Library/Application Support/XpandrLink/XpandrLink.settings` (or just clear
+  the saved MIDI output) to simulate a fresh install. Launch the app with the synth
+  connected. Confirm the output auto-selects once the synth is detected (no manual pick
+  needed), assuming your interface exposes a single output or one that shares the synth
+  input's port name.
+- [ ] If you have multiple unrelated MIDI outputs available, confirm it does NOT guess —
+  output should stay unset until you pick one manually.
+- [ ] Confirm a previously manually-chosen output is never silently overridden by this.
+
+### 4. Welcome greeting on connect
+
+- [ ] Launch the app with the synth connected (or connect it after launch). Confirm the
+  synth's own front-panel VFD shows `XPANDRLINK V1.0.0-BETA.1` once, shortly after
+  connecting.
+- [ ] Confirm it only fires once per session — reconnecting/re-triggering SysEx later in
+  the same session shouldn't re-send it.
+- [ ] Confirm the display returns to normal (patch name, etc.) as soon as you interact
+  with a function on the synth — no dedicated "OFF" needed, matching the G1 finding.
+
+### 5. Version label
+
+- [ ] Confirm the nav bar shows `v1.0.0-beta.1` (not truncated, not just `1.0.0`).
+- [ ] If convenient, check the AU/VST3 as listed in a DAW's plugin browser — should still
+  show a clean `1.0.0` (the plugin-metadata version is deliberately unaffected).
+
+### 6. Removed/changed UI (quick visual pass)
+
+- [ ] MIDI pane: confirm the DISPLAY text field + SEND button are gone, and the panel
+  layout still looks right without that row.
+- [ ] Morph pane: confirm the slider shows a `%` value, and only one button (UNDO)
+  remains in the action row, centered, not stretched oddly.
+
+---
+
 ## Recording results
 
 After each session, update [ROADMAP.md](../ROADMAP.md) — remove the row for anything fully
