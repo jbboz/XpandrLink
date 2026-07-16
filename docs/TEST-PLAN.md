@@ -384,11 +384,12 @@ asset. See [ROADMAP.md](../ROADMAP.md) for detail.
 
 ---
 
-## Session J — `midi-output-autoselect` branch (unmerged; unvalidated)
+## Session J — `midi-output-autoselect` branch — ✅ PASSED
 
-Everything on the local `midi-output-autoselect` branch, not yet pushed. Test with real
-hardware before this branch goes anywhere near `main`. Do items 1 and 2 first — they're
-the load-bearing ones; 3-6 are quick visual/functional checks.
+Everything on the local `midi-output-autoselect` branch, tested before merging to `main`.
+All six items confirmed clean, including the item 3 retest after fixing the incomplete
+test instructions (a fresh install needs a manually-enabled input before anything
+downstream can auto-detect).
 
 ### 1. Mod-matrix unused-slot sentinel fix — HIGH PRIORITY, same bug class as the Init
 
@@ -431,18 +432,18 @@ auto-detect anything, on the input OR output side.** Enabling an input is a requ
 manual step here, not optional -- without it, nothing downstream (SYNTH LED, output
 auto-select, the greeting) can ever fire.
 
-- [ ] Delete `~/Library/Application Support/XpandrLink/XpandrLink.settings` (or just clear
+- [x] Delete `~/Library/Application Support/XpandrLink/XpandrLink.settings` (or just clear
   the saved MIDI output) to simulate a fresh install. Launch the app.
-- [ ] In the MIDI pane, manually check the box for your synth's input port (this step is
+- [x] In the MIDI pane, manually check the box for your synth's input port (this step is
   required -- a fresh install starts with no inputs enabled).
-- [ ] Turn a knob or interact with the synth's front panel so it sends some SysEx. Confirm
+- [x] Turn a knob or interact with the synth's front panel so it sends some SysEx. Confirm
   the SYNTH LED lights up.
-- [ ] With the LED lit, confirm the output auto-selected (no manual pick needed) --
+- [x] With the LED lit, confirm the output auto-selected (no manual pick needed) --
   assuming your interface exposes a single output, or one that shares the synth input's
   port name.
-- [ ] If you have multiple unrelated MIDI outputs available, confirm it does NOT guess —
+- [x] If you have multiple unrelated MIDI outputs available, confirm it does NOT guess —
   output should stay unset until you pick one manually.
-- [ ] Confirm a previously manually-chosen output is never silently overridden by this.
+- [x] Confirm a previously manually-chosen output is never silently overridden by this.
 
 ### 4. Welcome greeting on connect
 
@@ -457,7 +458,7 @@ auto-select, the greeting) can ever fire.
 ### 5. Version label
 
 - [x] Confirm the nav bar shows `v1.0.0-beta.1` (not truncated, not just `1.0.0`).
-- [ ] If convenient, check the AU/VST3 as listed in a DAW's plugin browser — should still
+- [x] If convenient, check the AU/VST3 as listed in a DAW's plugin browser — should still
   show a clean `1.0.0` (the plugin-metadata version is deliberately unaffected).
 
 ### 6. Removed/changed UI (quick visual pass)
