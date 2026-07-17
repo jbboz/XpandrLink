@@ -3,7 +3,8 @@
 #include "../Data/XpanderData.h"
 #include "BinaryData.h"
 
-MidiEngine::MidiEngine()
+MidiEngine::MidiEngine(std::unique_ptr<IMidiBackend> backend)
+    : midiOutputBackend_(std::move(backend))
 {
     deviceManager.addChangeListener(this);
     startTimer(5);  // drain send queue at ~5 ms resolution
@@ -140,19 +141,13 @@ juce::StringArray MidiEngine::getEnabledMidiInputNames() const
 }
 
 void MidiEngine::setMidiOutput(const juce::String& deviceName) {
-    auto list = juce::MidiOutput::getAvailableDevices();
     juce::String openedIdentifier;
     {
-        // Lock: the MIDI thread dereferences activeOutput in the thru-forward path.
+        // Lock: the MIDI thread dereferences midiOutputBackend_ in the thru-forward path.
         const juce::ScopedLock sl(listenerLock);
-        activeOutput.reset();
-        for (auto& device : list) {
-            if (device.name == deviceName) {
-                activeOutput = juce::MidiOutput::openDevice(device.identifier);
-                openedIdentifier = device.identifier;
-                break;
-            }
-        }
+        midiOutputBackend_->close();
+        if (midiOutputBackend_->open(deviceName))
+            openedIdentifier = midiOutputBackend_->getIdentifier();
     }
     // Keep the shared device manager's default output in agreement, otherwise
     // its next change broadcast makes syncMidiOutputFromDeviceManager() revert
@@ -165,7 +160,7 @@ void MidiEngine::setMidiOutput(const juce::String& deviceName) {
     lastSentMode   = -1;
     lastQueuedPage = -1;
     lastQueuedMode = -1;
-    juce::String name = activeOutput ? activeOutput->getName() : juce::String();
+    juce::String name = midiOutputBackend_->isOpen() ? midiOutputBackend_->getName() : juce::String();
     const juce::ScopedLock sl(listenerLock);
     for (auto* l : listeners) l->onMidiOutputChanged(name);
 }
@@ -203,9 +198,7 @@ juce::String MidiEngine::getCurrentMidiInputName() const
 }
 
 juce::String MidiEngine::getCurrentMidiOutputName() const {
-    if (activeOutput != nullptr)
-        return activeOutput->getName();
-    return {};
+    return midiOutputBackend_->isOpen() ? midiOutputBackend_->getName() : juce::String();
 }
 
 juce::StringArray MidiEngine::getMidiInputs() const {
@@ -221,7 +214,7 @@ juce::StringArray MidiEngine::getMidiOutputs() const {
 }
 
 void MidiEngine::sendSysex(const std::vector<unsigned char>& data) {
-    if (activeOutput && !data.empty()) {
+    if (midiOutputBackend_->isOpen() && !data.empty()) {
         // createSysExMessage adds its own F0/F7 wrapper.
         // Strip them from the data if the caller already included them.
         const uint8_t* sysexData = data.data();
@@ -230,7 +223,7 @@ void MidiEngine::sendSysex(const std::vector<unsigned char>& data) {
             ++sysexData;
             sysexSize -= 2;
         }
-        activeOutput->sendMessageNow(juce::MidiMessage::createSysExMessage(sysexData, sysexSize));
+        midiOutputBackend_->send(juce::MidiMessage::createSysExMessage(sysexData, sysexSize));
         const juce::ScopedLock sl(listenerLock);
         for (auto* l : listeners) l->onMidiActivity(false);
     }
@@ -366,8 +359,8 @@ void MidiEngine::sendTuneAll()
     // Oberheim MIDI spec defines as "tune all" (autocal VCO freq/PW + VCF freq/res).
     // F6 is a one-byte System Common message, so send it directly rather than through
     // the SysEx queue. (There is no remote command for VCO-only tune.)
-    if (activeOutput)
-        activeOutput->sendMessageNow(juce::MidiMessage(0xF6));
+    if (midiOutputBackend_->isOpen())
+        midiOutputBackend_->send(juce::MidiMessage(0xF6));
 }
 
 void MidiEngine::sendDisplayOff()
@@ -557,6 +550,16 @@ bool MidiEngine::shouldCoalesceModAmount(juce::uint32 now, juce::uint32 lastSend
 {
     auto elapsed = (juce::int32)(now - lastSendTime);
     return elapsed >= 0 && elapsed <= throttleMs;
+}
+
+juce::String MidiEngine::chooseAutoOutput(const juce::String& detectedInputName,
+                                           const juce::StringArray& availableOutputs)
+{
+    if (availableOutputs.contains(detectedInputName))
+        return detectedInputName;
+    if (availableOutputs.size() == 1)
+        return availableOutputs[0];
+    return {};
 }
 
 void MidiEngine::sendModAmountNow(int destIndex, int idSource, int newAmount)
@@ -936,12 +939,12 @@ void MidiEngine::broadcastCachedPatch()
 
 void MidiEngine::sendProgramChange(int programNumber)
 {
-    if (activeOutput) {
+    if (midiOutputBackend_->isOpen()) {
         // Keep currentProgram in sync so subsequent nav SysEx deltas compute correctly.
         if (programNumber >= 0 && programNumber < 100)
             currentProgram = programNumber;
         // MIDI channel 1 (0x00 wire value); matches Xpander/Matrix-12 default channel
-        activeOutput->sendMessageNow(juce::MidiMessage::programChange(1, programNumber));
+        midiOutputBackend_->send(juce::MidiMessage::programChange(1, programNumber));
         juce::String logMsg = "TX: ProgramChange prog=" + juce::String(programNumber);
         const juce::ScopedLock sl(listenerLock);
         for (auto* l : listeners) {
@@ -1022,8 +1025,8 @@ void MidiEngine::sendPatchBytesToSlot(const std::vector<uint8_t>& sysex399, int 
 
 void MidiEngine::sendAllNotesOff()
 {
-    if (activeOutput)
-        activeOutput->sendMessageNow(juce::MidiMessage::allNotesOff(1));
+    if (midiOutputBackend_->isOpen())
+        midiOutputBackend_->send(juce::MidiMessage::allNotesOff(1));
 }
 
 void MidiEngine::storePatchToSlot(int slot)
@@ -1109,10 +1112,10 @@ void MidiEngine::handleIncomingMidiMessage(juce::MidiInput* source, const juce::
         bool fromSynth = (source != nullptr && source->getName() == synthIn);
         if (!fromSynth)
         {
-            // Lock: setMidiOutput (message thread) may reset activeOutput concurrently.
+            // Lock: setMidiOutput (message thread) may reset midiOutputBackend_ concurrently.
             const juce::ScopedLock sl(listenerLock);
-            if (activeOutput)
-                activeOutput->sendMessageNow(message);
+            if (midiOutputBackend_->isOpen())
+                midiOutputBackend_->send(message);
         }
     }
 

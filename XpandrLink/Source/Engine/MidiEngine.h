@@ -5,6 +5,7 @@
 #include <atomic>
 #include <deque>
 #include <functional>
+#include "IMidiBackend.h"
 
 class MidiEngine : public juce::MidiInputCallback,
                    public juce::ChangeListener,
@@ -76,7 +77,11 @@ public:
         juce::WeakReference<MidiEngine> midiEngineRef_;
     };
 
-    MidiEngine();
+    // Phase 3 (code-quality plan): the output backend is constructor-injected, defaulting to the
+    // real JUCE implementation so the sole production construction site
+    // (XpandrLinkAudioProcessor.h's plain `MidiEngine midiEngine;` member) needs no changes.
+    // Tests inject a MockMidiBackend to drive the real send path without a MIDI device.
+    explicit MidiEngine(std::unique_ptr<IMidiBackend> backend = std::make_unique<JuceMidiBackend>());
     ~MidiEngine() override;
 
     // In standalone builds, share the host's AudioDeviceManager so that the
@@ -174,7 +179,7 @@ public:
     // Call this to push a restored/loaded patch into any open editor UI.
     void broadcastCachedPatch();
 
-    bool isMidiOutputOpen() const { return activeOutput != nullptr; }
+    bool isMidiOutputOpen() const { return midiOutputBackend_->isOpen(); }
 
     // Send the cached 399-byte patch SysEx directly to the synth output.
     // The device-ID byte is updated to match the current sysexID before sending.
@@ -251,6 +256,16 @@ public:
     // immediately). Wraparound-safe signed subtraction, same pattern as handleModRouting.
     static bool shouldCoalesceModAmount(juce::uint32 now, juce::uint32 lastSendTime, int throttleMs);
 
+    // Public for unit testing: picks a MIDI output to auto-select once the synth's input
+    // port is detected, when no output is set yet. Only guesses when there's a single,
+    // unambiguous candidate -- an output sharing the detected input's name (the common
+    // case: an interface exposes matching names for its IN/OUT pair of a given port), or
+    // the only output that exists at all. Returns an empty string when the choice would
+    // be a guess (multiple outputs, none name-matching), since sending SysEx to the wrong
+    // device is worse than asking the user to pick.
+    static juce::String chooseAutoOutput(const juce::String& detectedInputName,
+                                          const juce::StringArray& availableOutputs);
+
     // Public for unit testing: drives the private incoming-message handler directly, without
     // requiring a real, open MIDI input device. Pure forwarding call, no logic of its own.
     // `source` may be nullptr for message types whose handling doesn't depend on port identity
@@ -261,6 +276,12 @@ public:
     void processIncomingMessageForTest(juce::MidiInput* source, const juce::MidiMessage& message) {
         handleIncomingMidiMessage(source, message);
     }
+
+    // Public for unit testing: drains the send queue on demand. TestMain.cpp does not run a live
+    // juce::MessageManager dispatch loop, so the real Timer callback that normally drains
+    // sendQueue every 5ms never fires during unit tests -- this lets a test deterministically
+    // drive the same drain logic (including the mod-amount coalescing flush) without one.
+    void drainSendQueueForTest() { timerCallback(); }
 
     // CC automation table: map CC numbers (0-127) to Xpander parameter IDs.
     // Incoming CC from non-synth inputs is scaled to the param range and broadcast
@@ -318,9 +339,12 @@ private:
 
     juce::AudioDeviceManager  deviceManager;
     juce::AudioDeviceManager* externalDeviceManager = nullptr;
-    // Reset/reopened on the message thread; dereferenced on the MIDI thread (thru
-    // forward). Both sides take listenerLock around access.
-    std::unique_ptr<juce::MidiOutput> activeOutput;
+    // Reset/reopened (via close()/open()) on the message thread; dereferenced (isOpen()/send())
+    // on the MIDI thread (thru forward). Both sides take listenerLock around access -- see
+    // ADR-007 (docs/adr/007-activeoutput-locking-invariant.md). midiOutputBackend_ itself (the
+    // outer pointer) is never reassigned after construction; only the backend's internal open/
+    // closed state changes, which is what the locking actually protects.
+    std::unique_ptr<IMidiBackend> midiOutputBackend_;
 
     // Cross-thread scalars: written on the MIDI thread (auto-detect, rx page tracking)
     // and/or message thread (setters, queue drain), read from the other side.
