@@ -1,0 +1,193 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  JUCE_TAG: "8.0.12" # keep in sync with SPEC.md "JUCE version" note
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - name: Checkout XpandrLink
+        uses: actions/checkout@v4
+        with:
+          path: XpandrLink
+
+      - name: Checkout JUCE (sibling directory, pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: juce-framework/JUCE
+          ref: ${{ env.JUCE_TAG }}
+          path: JUCE
+
+      - name: Configure (Debug)
+        working-directory: XpandrLink
+        run: cmake -B build/mac -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_ARCHITECTURES=arm64
+
+      - name: Build Standalone
+        working-directory: XpandrLink
+        run: cmake --build build/mac --config Debug --target XpandrLink_Standalone -j 4
+
+      - name: Build AU
+        working-directory: XpandrLink
+        run: cmake --build build/mac --config Debug --target XpandrLink_AU -j 4
+
+      - name: Force AudioComponent registry rescan
+        # macOS's Component Manager caches the AU list and doesn't pick up a
+        # freshly-installed component in an ephemeral CI environment without this.
+        run: killall -9 AudioComponentRegistrar || true
+
+      - name: Validate AU (auval)
+        run: auval -v aufx XpLk RpAu
+
+      - name: Build Tests
+        working-directory: XpandrLink
+        run: cmake --build build/mac --config Debug --target XpandrLink_Tests -j 4
+
+      - name: Run Tests
+        working-directory: XpandrLink
+        run: ctest --test-dir build/mac -C Debug --output-on-failure
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout XpandrLink
+        uses: actions/checkout@v4
+        with:
+          path: XpandrLink
+
+      - name: Checkout JUCE (sibling directory, pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: juce-framework/JUCE
+          ref: ${{ env.JUCE_TAG }}
+          path: JUCE
+
+      - name: Configure (Release)
+        working-directory: XpandrLink
+        run: cmake -B build/win -A x64
+
+      - name: Build Standalone + Tests
+        working-directory: XpandrLink
+        run: |
+          cmake --build build/win --config Release --target XpandrLink_Standalone -j 4
+          cmake --build build/win --config Release --target XpandrLink_Tests -j 4
+
+      - name: Run Tests
+        working-directory: XpandrLink
+        run: ctest --test-dir build/win -C Release --output-on-failure
+
+  static-analysis:
+    runs-on: macos-14
+    # Non-blocking / informational for now — this project has never run a linter before,
+    # so an initial pass is expected to surface a real backlog of pre-existing findings
+    # that need triage before this can be made gating. See docs/adr and the code-quality
+    # plan (ROADMAP.md) for the phased plan this belongs to.
+    continue-on-error: true
+    steps:
+      - name: Checkout XpandrLink
+        uses: actions/checkout@v4
+        with:
+          path: XpandrLink
+
+      - name: Checkout JUCE (sibling directory, pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: juce-framework/JUCE
+          ref: ${{ env.JUCE_TAG }}
+          path: JUCE
+
+      - name: Configure (generates compile_commands.json)
+        working-directory: XpandrLink
+        run: cmake -B build/mac -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-tidy on project sources
+        working-directory: XpandrLink
+        run: |
+          find XpandrLink/Source -iname "*.cpp" | xargs -I{} clang-tidy -p build/mac {} || true
+
+  sanitizers:
+    runs-on: macos-14
+    # GATING as of 2026-07-16: confirmed with real green runs on this exact runner (macos-14),
+    # e.g. runs 29515515730 and 29528760147 -- so the earlier non-blocking caveat no longer
+    # applies here. (On the dev machine this job was originally written on -- macOS 26.5,
+    # Xcode-bundled clang 17.0.0 -- ASan's own runtime init hangs indefinitely instead, inside
+    # __asan::AsanInitFromRtl() while probing the dyld shared cache; reproduced identically with
+    # a trivial hello-world program under the same flags, confirming a toolchain/OS-version
+    # mismatch on that specific machine, not an XpandrLink bug. macos-14 is unaffected.) Per the
+    # original code-quality plan (Phase 2): this project's specific, repeated history of subtle
+    # concurrency bugs means sanitizer coverage should be required, not optional, once confirmed
+    # runnable here.
+    steps:
+      - name: Checkout XpandrLink
+        uses: actions/checkout@v4
+        with:
+          path: XpandrLink
+
+      - name: Checkout JUCE (sibling directory, pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: juce-framework/JUCE
+          ref: ${{ env.JUCE_TAG }}
+          path: JUCE
+
+      - name: Configure with ASan
+        working-directory: XpandrLink
+        run: >
+          cmake -B build/asan -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+
+      - name: Build Tests (ASan)
+        working-directory: XpandrLink
+        run: cmake --build build/asan --target XpandrLink_Tests -j 4
+
+      - name: Run Tests (ASan, 120s timeout — known hang risk, see comment above)
+        working-directory: XpandrLink
+        # macOS runners don't ship GNU `timeout`; use perl's alarm (preinstalled) instead.
+        run: perl -e 'alarm shift; exec @ARGV' 120 ./build/asan/XpandrLink_Tests_artefacts/Debug/XpandrLink_Tests
+
+  tsan:
+    runs-on: macos-14
+    # GATING as of 2026-07-16: confirmed with a real green run on this exact runner
+    # (macos-14) on PR #29 -- https://github.com/jbboz/XplorerMac/actions/runs/29528760147 --
+    # so the earlier non-blocking caveat no longer applies here. (It segfaults immediately with
+    # zero output on the dev machine this job was originally written on -- macOS 26.5,
+    # Xcode-bundled clang 17.0.0 -- confirmed environmental via a trivial hello-world program
+    # crashing identically under the same flags, i.e. a toolchain/OS-version mismatch on that
+    # specific machine, not an XpandrLink bug. macos-14 is unaffected.) This project had never
+    # run TSan before this job (added as part of the IMidiBackend refactor's own validation
+    # criteria -- see docs/plans/2026-07-16-code-quality-improvement-plan.md Phase 3).
+    steps:
+      - name: Checkout XpandrLink
+        uses: actions/checkout@v4
+        with:
+          path: XpandrLink
+
+      - name: Checkout JUCE (sibling directory, pinned)
+        uses: actions/checkout@v4
+        with:
+          repository: juce-framework/JUCE
+          ref: ${{ env.JUCE_TAG }}
+          path: JUCE
+
+      - name: Configure with TSan
+        working-directory: XpandrLink
+        run: >
+          cmake -B build/tsan -DCMAKE_BUILD_TYPE=Debug -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread"
+
+      - name: Build Tests (TSan)
+        working-directory: XpandrLink
+        run: cmake --build build/tsan --target XpandrLink_Tests -j 4
+
+      - name: Run Tests (TSan, 120s timeout — known crash/hang risk, see comment above)
+        working-directory: XpandrLink
+        # macOS runners don't ship GNU `timeout`; use perl's alarm (preinstalled) instead.
+        run: perl -e 'alarm shift; exec @ARGV' 120 ./build/tsan/XpandrLink_Tests_artefacts/Debug/XpandrLink_Tests
