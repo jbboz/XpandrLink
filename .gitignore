@@ -1,0 +1,32 @@
+# Build output
+/build/
+build-*/
+cmake-build-*/
+
+# Xcode derived data / user-specific project settings
+*.xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+xcuserdata/
+
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Visual Studio / Windows build artifacts
+.vs/
+out/
+*.sdf
+*.opensdf
+*.suo
+*.user
+
+# Local dev-agent memory (Claude Code) -- not part of the public project;
+# kept locally only for session continuity, same as it was in the old
+# private XplorerMac repo this project was curated from.
+/CLAUDE.md
+/CLAUDE-MEMORY.md
+/.claude/
