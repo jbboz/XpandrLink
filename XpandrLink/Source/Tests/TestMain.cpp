@@ -1,0 +1,28 @@
+#include <JuceHeader.h>
+#include "BUG01_KnobColDecodeTest.h"
+#include "BUG05_ProgramChangeSysexTest.h"
+#include "ChangeModulationSourceTest.h"
+#include "FullModMatrixSlotTest.h"
+#include "IDSourceTrackingTest.h"
+#include "InitPatchLoadTest.h"
+#include "MidiEngineCharacterizationTest.h"
+#include "MidiEngineSendPathTest.h"
+#include "MidiOutputAutoSelectTest.h"
+#include "ModAmountCoalesceTest.h"
+#include "ModEditDecodeTest.h"
+#include "PatchRandomizerSafetyTest.h"
+
+int main()
+{
+    juce::ScopedJuceInitialiser_GUI juceInit;
+
+    juce::UnitTestRunner runner;
+    runner.runAllTests();
+
+    int failures = 0;
+    for (int i = 0; i < runner.getNumResults(); ++i)
+        if (auto* r = runner.getResult(i))
+            failures += r->failures;
+
+    return failures > 0 ? 1 : 0;
+}
