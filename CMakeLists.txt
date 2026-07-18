@@ -11,7 +11,7 @@ project(XpandrLink VERSION 1.0.0 LANGUAGES C CXX)
 # can't carry a pre-release suffix some hosts won't parse. Update this to match the
 # current GitHub release tag; PROJECT_VERSION only needs to change for an actual
 # version bump, not every pre-release tag.
-set(XPANDRLINK_RELEASE_LABEL "1.0.0-beta.1")
+set(XPANDRLINK_RELEASE_LABEL "1.0.0-beta.2")
 
 # JUCE lives as a sibling directory (same setup as the previous Projucer config).
 add_subdirectory(../JUCE "${CMAKE_BINARY_DIR}/JUCE" EXCLUDE_FROM_ALL)
