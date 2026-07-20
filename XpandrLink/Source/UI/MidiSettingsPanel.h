@@ -199,7 +199,7 @@ public:
         // status text; painted in paint(). Sized to fit "Not Connected" (the longer of the
         // two states) rather than stretching across the rest of the row.
         auto vfdFont = ThemeData::getVfdFont(11.0f);
-        int textW = (int) std::ceil(vfdFont.getStringWidthFloat("Not Connected"));
+        int textW = juce::GlyphArrangement::getStringWidthInt(vfdFont, "Not Connected");
         int boxW = 16 /*LED cell*/ + 4 /*gap*/ + textW + 12 /*inner padding*/;
         synthBoxArea_ = idRow.removeFromLeft(boxW);
         auto boxInner = synthBoxArea_.reduced(6, 0);
