@@ -36,5 +36,14 @@ to JUCE — extended well beyond the original's scope.
   own edit SysEx and mirrored live in both matrix views, instead of
   re-requesting a patch dump (which never reflected those edits). Fast
   amount-knob drags are coalesced so they can't flood the synth's MIDI IN.
+  Removing a routing now correctly restacks the remaining entries instead
+  of leaving a gap, and saving/storing a patch no longer risks writing a
+  corrupt silent routing into an unused mod-matrix slot.
+- **MIDI output auto-select** — the editor picks the matching MIDI output
+  automatically once it detects the synth on an input port, and shows a
+  greeting on the synth's own front-panel VFD the first time it's detected
+  each session.
+- **`IMidiBackend` abstraction** — the MIDI engine's send path is injectable
+  and independently unit-tested, with CI-gated ASan/TSan sanitizer runs.
 
 See [FEATURES.md](FEATURES.md) for the complete inventory.
