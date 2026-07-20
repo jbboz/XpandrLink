@@ -9,7 +9,7 @@ Standalone app, Audio Unit, and VST3 for macOS (Apple Silicon + Intel) and Windo
 ## What it does
 
 XpandrLink gives you hands-on visual control of every one of the 226 parameters in an
-Xpander or Matrix-12 patch — five LFOs, five envelopes, three tracking generators, four
+Xpander or Matrix-12 patch: five LFOs, five envelopes, three tracking generators, four
 ramps, the 15-mode filter, and the full 20-slot modulation matrix — with everything kept
 in sync bi-directionally: turn a knob on the synth and the editor follows; drag in the
 editor and the synth updates instantly.
@@ -85,7 +85,7 @@ for those, then rescan plugins in your DAW.
 
 ### First launch on Windows
 
-Same situation, different mechanism: these builds aren't signed with a code-signing
+The builds aren't signed with a code-signing
 certificate, so Windows marks the downloaded files and Microsoft Defender SmartScreen
 blocks them the first time you try to run or load one.
 
