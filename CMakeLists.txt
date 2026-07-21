@@ -80,6 +80,7 @@ target_sources(XpandrLink PRIVATE
     XpandrLink/Source/Main.cpp
     XpandrLink/Source/MainComponent.cpp
     XpandrLink/Source/Engine/MidiEngine.cpp
+    XpandrLink/Source/Engine/MidiSendQueue.cpp
     XpandrLink/Source/Data/PatchLibrary.cpp
     XpandrLink/Source/Tabs/EditorTabComponent.cpp
     XpandrLink/Source/Tabs/LibraryTabComponent.cpp
@@ -139,6 +140,7 @@ juce_generate_juce_header(XpandrLink_Tests)
 target_sources(XpandrLink_Tests PRIVATE
     XpandrLink/Source/Tests/TestMain.cpp
     XpandrLink/Source/Engine/MidiEngine.cpp
+    XpandrLink/Source/Engine/MidiSendQueue.cpp
     XpandrLink/Source/Data/PatchLibrary.cpp
     XpandrLink/Source/UI/ModSummaryPanel.cpp
     XpandrLink/Source/UI/FullModMatrixPanel.cpp

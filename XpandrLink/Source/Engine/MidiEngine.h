@@ -3,9 +3,9 @@
 #include <vector>
 #include <algorithm>
 #include <atomic>
-#include <deque>
 #include <functional>
 #include "IMidiBackend.h"
+#include "MidiSendQueue.h"
 
 class MidiEngine : public juce::MidiInputCallback,
                    public juce::ChangeListener,
@@ -318,7 +318,9 @@ private:
     juce::AudioDeviceManager& activeManager();
     void sendSysex(const std::vector<unsigned char>& data);
 
-    // Send-queue helpers — all called on the message thread only.
+    // Send-queue helpers — all called on the message thread only. These are thin forwarders
+    // to sendScheduler_ so the ~12 internal call sites keep their existing signatures; the
+    // page-select forwarder supplies the current sysexID to the (protocol-agnostic) queue.
     // Enqueue a SysEx message (incl. F0/F7); it will be sent after the current settle period.
     void enqueueMessage(std::vector<uint8_t> bytes, int delayAfterMs = 0);
     // Enqueue a non-SysEx action (e.g. sendProgramChange) with an optional delay before it runs.
@@ -326,16 +328,10 @@ private:
     // Enqueue a page-select unless the queued page already matches. force=true always enqueues.
     void enqueuePageSelectIfNeeded(int page, int mode, int settleMs, bool force = false);
 
-    // Send-queue state (message-thread only — no lock needed).
-    struct QueuedMessage {
-        std::vector<uint8_t>    bytes;         // SysEx (incl. F0/F7); empty → use action
-        std::function<void()>   action;
-        int                     delayAfterMs = 0;
-    };
-    std::deque<QueuedMessage> sendQueue;
-    juce::uint32              nextSendTime   = 0;
-    int                       lastQueuedPage = -1;  // page last pushed onto sendQueue
-    int                       lastQueuedMode = -1;
+    // Generic send-queue / pacing machinery (Phase 4 extraction). Message-thread only, no
+    // lock. onSendSysex is wired in the constructor to sendSysex() + the byte-inspection that
+    // updates lastSentPage/lastSentMode/lastModSentTime_ (those atomics stay on MidiEngine).
+    MidiSendQueue sendScheduler_;
 
     juce::AudioDeviceManager  deviceManager;
     juce::AudioDeviceManager* externalDeviceManager = nullptr;
