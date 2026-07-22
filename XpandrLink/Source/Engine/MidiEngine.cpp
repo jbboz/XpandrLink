@@ -6,6 +6,31 @@
 MidiEngine::MidiEngine(std::unique_ptr<IMidiBackend> backend)
     : midiOutputBackend_(std::move(backend))
 {
+    // Reproduce the pre-Phase-4 drain body exactly: send the SysEx, then inspect its bytes
+    // to update the cross-thread atomics that stay on MidiEngine (not in MidiSendQueue).
+    // `now` is the drain's shared snapshot, passed through so lastModSentTime_ tracks the
+    // same clock the drain used (see MidiSendQueue::drain).
+    sendScheduler_.onSendSysex = [this](const std::vector<uint8_t>& bytes, juce::uint32 now)
+    {
+        sendSysex(bytes);
+        // Page-select format: F0 10 id 0B page mode F7 (7 bytes, cmd at [3]).
+        // Only real parameter pages (>= PAGE_VCO1) become the hardware-knob
+        // fallback page; Master/MIDI/Tune command pages (< 0x20) must not clobber
+        // lastSentPage: the synth sends knob-delta messages with no preceding
+        // page-select unless the front panel changed pages, so we fall back to
+        // this value to know which page an unattributed knob delta belongs to.
+        if (bytes.size() == 7 && bytes[3] == 0x0B
+            && bytes[4] >= Matrix12::PAGE_VCO1)
+        {
+            lastSentPage = bytes[4];
+            lastSentMode = bytes[5];
+        }
+        // Mod routing format: F0 10 id 0F ... (cmd at [3]).
+        // Record send time so handleModRouting can suppress the hardware echo.
+        if (bytes.size() >= 4 && bytes[3] == 0x0F)
+            lastModSentTime_ = now;
+    };
+
     deviceManager.addChangeListener(this);
     startTimer(5);  // drain send queue at ~5 ms resolution
 }
@@ -13,7 +38,7 @@ MidiEngine::MidiEngine(std::unique_ptr<IMidiBackend> backend)
 MidiEngine::~MidiEngine()
 {
     stopTimer();
-    sendQueue.clear();
+    sendScheduler_.reset();
     masterReference.clear();
     auto& dm = activeManager();
     dm.removeChangeListener(this);
@@ -155,11 +180,9 @@ void MidiEngine::setMidiOutput(const juce::String& deviceName) {
     if (externalDeviceManager != nullptr
         && externalDeviceManager->getDefaultMidiOutputIdentifier() != openedIdentifier)
         externalDeviceManager->setDefaultMidiOutputDevice(openedIdentifier);
-    sendQueue.clear();
-    lastSentPage   = -1;
+    sendScheduler_.reset();  // clears the queue + queued-page dedup state (leaves nextSendTime_)
+    lastSentPage   = -1;     // unrelated cross-thread atomics — stay on MidiEngine
     lastSentMode   = -1;
-    lastQueuedPage = -1;
-    lastQueuedMode = -1;
     juce::String name = midiOutputBackend_->isOpen() ? midiOutputBackend_->getName() : juce::String();
     const juce::ScopedLock sl(listenerLock);
     for (auto* l : listeners) l->onMidiOutputChanged(name);
@@ -246,65 +269,26 @@ void MidiEngine::timerCallback()
         sendModAmountNow(pending.destIndex, pending.idSource, pending.amount);
     }
 
-    while (!sendQueue.empty())
-    {
-        // Use signed subtraction to handle uint32 wraparound (~49-day period).
-        if ((juce::int32)(now - nextSendTime) < 0) break;
-
-        auto msg = std::move(sendQueue.front());
-        sendQueue.pop_front();
-
-        if (!msg.bytes.empty())
-        {
-            sendSysex(msg.bytes);
-            // Page-select format: F0 10 id 0B page mode F7 (7 bytes, cmd at [3]).
-            // Only real parameter pages (>= PAGE_VCO1) become the hardware-knob
-            // fallback page; Master/MIDI/Tune command pages (< 0x20) must not clobber
-            // lastSentPage: the synth sends knob-delta messages with no preceding
-            // page-select unless the front panel changed pages, so we fall back to
-            // this value to know which page an unattributed knob delta belongs to.
-            if (msg.bytes.size() == 7 && msg.bytes[3] == 0x0B
-                && msg.bytes[4] >= Matrix12::PAGE_VCO1)
-            {
-                lastSentPage = msg.bytes[4];
-                lastSentMode = msg.bytes[5];
-            }
-            // Mod routing format: F0 10 id 0F ... (cmd at [3]).
-            // Record send time so handleModRouting can suppress the hardware echo.
-            if (msg.bytes.size() >= 4 && msg.bytes[3] == 0x0F)
-                lastModSentTime_ = now;
-        }
-        else if (msg.action)
-        {
-            msg.action();
-        }
-
-        nextSendTime = now + (juce::uint32)msg.delayAfterMs;
-        if (msg.delayAfterMs > 0) break;  // settle before next message
-    }
+    // Drain the send queue; the byte-inspection side-effects (lastSentPage/Mode,
+    // lastModSentTime_) run via sendScheduler_.onSendSysex, wired in the constructor.
+    sendScheduler_.drain(now);
 }
 
+// Thin forwarders to sendScheduler_ — the ~12 internal call sites keep their signatures.
 void MidiEngine::enqueueMessage(std::vector<uint8_t> bytes, int delayAfterMs)
 {
-    sendQueue.push_back({ std::move(bytes), {}, delayAfterMs });
+    sendScheduler_.enqueueMessage(std::move(bytes), delayAfterMs);
 }
 
 void MidiEngine::enqueueAction(std::function<void()> action, int delayAfterMs)
 {
-    sendQueue.push_back({ {}, std::move(action), delayAfterMs });
+    sendScheduler_.enqueueAction(std::move(action), delayAfterMs);
 }
 
 void MidiEngine::enqueuePageSelectIfNeeded(int page, int mode, int settleMs, bool force)
 {
-    if (!force && lastQueuedPage == page && lastQueuedMode == mode) return;
-    std::vector<uint8_t> ps = {
-        0xF0, 0x10, (uint8_t)(sysexID),
-        0x0B, (uint8_t)page, (uint8_t)mode,
-        0xF7
-    };
-    enqueueMessage(std::move(ps), settleMs);
-    lastQueuedPage = page;
-    lastQueuedMode = mode;
+    // sysexID lives on MidiEngine (cross-thread atomic); supply it to the protocol-agnostic queue.
+    sendScheduler_.enqueuePageSelectIfNeeded(page, mode, settleMs, (uint8_t)(sysexID), force);
 }
 
 void MidiEngine::sendPageSelect(int page, int mode, bool force)
