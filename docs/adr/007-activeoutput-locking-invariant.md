@@ -62,6 +62,18 @@ unchanged — only where the mutable state physically lives moved one level of i
   (`XpandrLink/Source/Tests/MockMidiBackend.h`) with no live `Timer`/`MessageManager` loop and no real MIDI
   device — including the burst-drag mod-amount coalescing scenario that originally motivated this ADR.
 
+## Post-Phase-4 shape (2026-07-21)
+
+Phase 4 extracted the generic send-queue/pacing machinery into a new `MidiSendQueue` class
+(`XpandrLink/Source/Engine/MidiSendQueue.{h,cpp}`; see ADR-003's post-Phase-4 note). **This did not
+touch the output-backend locking invariant at all.** `MidiSendQueue` never sees `midiOutputBackend_`:
+it holds only protocol-agnostic queue state and calls back into `MidiEngine` via `onSendSysex`, whose
+body still funnels through `MidiEngine::sendSysex()` — the same message-thread-only, unlocked send path
+as before. No new send path was introduced (only where the queue's *storage* lives moved), so the "any
+new send path must follow the convention" clause below is not engaged. Every `midiOutputBackend_` access
+listed in the Post-Phase-3 shape remains at its exact prior call site with its exact prior lock/no-lock
+discipline.
+
 ## Consequences
 
 - Any refactor touching `MidiEngine`'s output ownership must explicitly re-verify, line-by-line, that

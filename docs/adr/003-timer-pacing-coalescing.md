@@ -30,3 +30,20 @@ rather than enqueuing every intermediate drag tick.
   (e.g. moving to `std::jthread`/`condition_variable`) touches this exact historically-fragile code path
   and requires a dedicated hardware validation pass specifically targeting rapid-drag/burst scenarios
   before being considered safe.
+
+## Post-Phase-4 shape (2026-07-21)
+
+The generic send-queue/pacing machinery (the `QueuedMessage` deque, `nextSendTime`, the queued-page
+dedup state, and the `timerCallback` drain loop) was extracted verbatim into a new `MidiSendQueue`
+class (`XpandrLink/Source/Engine/MidiSendQueue.{h,cpp}`), a plain value member on `MidiEngine`
+(`sendScheduler_`). **The pacing behavior itself is unchanged** — same wraparound-safe drain, same
+"send the whole run of zero-delay messages then stop on the first nonzero delay" semantics. `MidiEngine`
+remains the `juce::Timer`; `timerCallback()` snapshots `now` once, runs the mod-flush block, then calls
+`sendScheduler_.drain(now)`. The drain's byte-inspection side-effects (updating `lastSentPage`/
+`lastSentMode`/`lastModSentTime_`) run through a `MidiSendQueue::onSendSysex` callback wired once in the
+`MidiEngine` constructor, keeping those cross-thread atomics on `MidiEngine`.
+
+**The mod-amount coalescing throttle (`shouldCoalesceModAmount`, `PendingModAmount`, `sendModAmountNow`,
+`changeModulationAmount`) deliberately did NOT move** — it depends on `MidiEngine`-private protocol data
+and is the historically-fragile piece this ADR exists for, so it stays physically on `MidiEngine`. The
+throttle/flush in `timerCallback` runs before `drain()`, exactly as before.
