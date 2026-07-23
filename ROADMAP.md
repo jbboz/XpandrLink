@@ -130,11 +130,11 @@ Standalone builds and runs on Windows 11, hardware-validated against both synths
 
 ## P2 — Feature Gaps vs C# Original
 
-Full side-by-side inventory (every menu item + controller command traced against XpandrLink)
-lives in [`docs/FEATURE-PARITY-AUDIT.md`](docs/FEATURE-PARITY-AUDIT.md); the `G#` ids below
-match that document. C# source is on disk at `~/Documents/Development/XplorerEditor` (also on
-GitHub at `xplorer2716/XplorerEditor`). **The three highest-value gaps (G1 display banner, G2
-store-to-slot, G3 backup/restore) are the ones prior audits missed.** G2 and G3-restore write
+Gaps below (`G#` ids) were found by tracing every menu item and controller command in the C#
+original against XpandrLink. C# source is on disk at `~/Documents/Development/XplorerEditor`
+(also on GitHub at `xplorer2716/XplorerEditor`) — always re-check against that live source, not
+this table, before implementing any of these. **The three highest-value gaps (G1 display banner,
+G2 store-to-slot, G3 backup/restore) are the ones prior audits missed.** G2 and G3-restore write
 permanent hardware memory — they become P0 validation debt the moment they're coded.
 
 Suggested order: **G9 → G1 → G2 → G3+G4 → G6 → rest.** (G9 is tiny and unblocks the correct
