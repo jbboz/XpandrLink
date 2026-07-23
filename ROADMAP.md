@@ -69,7 +69,15 @@ validation complete 2026-07-17** — user confirmed "testing complete, working a
 2026-07-16, then "testing passed on both standalone and AU" 2026-07-17 (VST3 not separately tried, but
 the same `MidiEngine`/`IMidiBackend` code path is shared across both plugin formats). Phase 3 is fully
 done, coding and hardware validation both.
-**Phase 4 (file decomposition)** is next up in this plan, now fully unblocked, not started yet.
+**Phase 4 (file decomposition) — first cut done, hardware-validated**: extracted the generic
+send-queue/pacing machinery out of `MidiEngine` into a new `MidiSendQueue` class
+([PR #3](https://github.com/jbboz/XpandrLink/pull/3)). Deliberately mechanical — ADR-003's
+mod-amount coalescing and ADR-007's `IMidiBackend`/locking discipline stay untouched on
+`MidiEngine`, same drain algorithm and lock/no-lock shape at every send-path call site. Same
+code as the already hardware-validated version (rapid mod-amount drag, page-select-heavy
+sequences, patch store/dump round-trip), ported verbatim. Remaining Phase 4 candidates
+(`EditorTabComponent.cpp`, `PatchBrowserPanel.cpp`, `PatchLibrary.cpp`,
+`HardwareComponents.cpp`) not yet started.
 
 **ASan hang — root-caused, resolved as environmental, not a code bug (2026-07-16)**: `XpandrLink_Tests`
 built with `-fsanitize=address` spun at ~100% CPU with zero output for 2.5+ minutes (uninstrumented build
