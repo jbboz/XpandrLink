@@ -12,6 +12,7 @@
 #include "ModEditDecodeTest.h"
 #include "PatchBlenderTest.h"
 #include "PatchRandomizerSafetyTest.h"
+#include "PatchSysexFileTest.h"
 #include "TimbreSpaceEngineTest.h"
 
 int main()

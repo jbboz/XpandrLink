@@ -5,6 +5,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <vector>
+#include "PatchSysexFile.h"
 
 struct PatchEntry
 {
@@ -54,7 +55,7 @@ public:
 
     // Number of valid 399-byte single-patch blocks in a file (0 if none) — public so
     // the UI can decide single vs. bank before prompting for a description.
-    static int patchCountInFile(const juce::File& file) { return countPatchesInFile(file); }
+    static int patchCountInFile(const juce::File& file) { return PatchSysexFile::countPatchesInFile(file); }
 
     // Update a patch's free-text description (write-through to DB).
     void setDescription(int index, const juce::String& description);
@@ -98,28 +99,9 @@ private:
     // canonical (non-dup) entry is independent of the chosen display sort.
     void applySort();
 
-    // Extract 8-char patch name from a 399-byte SysEx blob
-    static juce::String extractNameFromSysex(const std::vector<uint8_t>& sysex399);
-
-    // Write an 8-char name into the patch name bytes (188-195) of a 399-byte SysEx blob,
-    // in place. Name is uppercased, space-padded to 8 chars. No-op if sysex isn't 399 bytes.
-    static void embedNameIntoSysex(std::vector<uint8_t>& sysex399, const juce::String& name);
-
-    // Scan bankFile for all valid 399-byte single-patch SysEx blocks
-    static std::vector<std::vector<uint8_t>> extractPatchesFromBank(const juce::File& bankFile);
-
-    // Copy src into destDir, appending _N suffix on collision.
-    // Returns destination file, or empty File on failure.
-    static juce::File safeCopyToDir(const juce::File& src,
-                                    const juce::File& destDir,
-                                    const juce::String& preferredStem = {});
-
     // Insert a new row; refresh() is NOT called — caller is responsible.
     bool insertRow(const juce::String& id, const juce::String& name,
                    const juce::File& file, const juce::String& description);
-
-    // Count valid 399-byte single-patch blocks in a file (0 if none/invalid).
-    static int countPatchesInFile(const juce::File& file);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PatchLibrary)
 };
