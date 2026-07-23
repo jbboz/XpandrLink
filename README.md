@@ -4,7 +4,7 @@
 
 Standalone app, Audio Unit, and VST3 for macOS (Apple Silicon + Intel) and Windows.
 
-![XpandrLink main editor](docs/images/editor-main.png)
+![XpandrLink main editor](docs/images/editor-main-v2.png)
 
 ## What it does
 
