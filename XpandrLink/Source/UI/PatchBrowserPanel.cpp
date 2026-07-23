@@ -32,18 +32,8 @@ PatchBrowserPanel::PatchBrowserPanel(PatchLibrary& library, MidiEngine& engine)
     setupFilterBtn(btnFav_,  juce::String::fromUTF8("\xe2\x98\x85")); // ★
     btnAll_.setToggleState(true,  juce::dontSendNotification);
     btnFav_.setToggleState(false, juce::dontSendNotification);
-    btnAll_.onClick = [this] {
-        showFavoritesOnly_ = false;
-        btnAll_.setToggleState(true,  juce::dontSendNotification);
-        btnFav_.setToggleState(false, juce::dontSendNotification);
-        applyFilter();
-    };
-    btnFav_.onClick = [this] {
-        showFavoritesOnly_ = true;
-        btnAll_.setToggleState(false, juce::dontSendNotification);
-        btnFav_.setToggleState(true,  juce::dontSendNotification);
-        applyFilter();
-    };
+    btnAll_.onClick = [this] { setShowFavoritesOnly(false); };
+    btnFav_.onClick = [this] { setShowFavoritesOnly(true); };
 
     // Sort cycle button — Name → Date → Description → Name
     setupFilterBtn(btnSort_, "Name");
@@ -123,6 +113,16 @@ void PatchBrowserPanel::refresh()
 {
     library_.refresh();
     applyFilter();
+}
+
+std::vector<PatchEntry> PatchBrowserPanel::getFilteredEntries() const
+{
+    std::vector<PatchEntry> out;
+    out.reserve((size_t)filteredIndices_.size());
+    for (int idx : filteredIndices_)
+        if (idx >= 0 && idx < library_.getNumPatches())
+            out.push_back(library_.getPatch(idx));
+    return out;
 }
 
 void PatchBrowserPanel::visibilityChanged()
@@ -376,6 +376,14 @@ void PatchBrowserPanel::setupActionBtn(juce::TextButton& btn, const juce::String
     btn.setColour(juce::TextButton::buttonOnColourId,juce::Colour(0xff1a4060));
     btn.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff55afd2));
     addAndMakeVisible(btn);
+}
+
+void PatchBrowserPanel::setShowFavoritesOnly(bool showFavoritesOnly)
+{
+    showFavoritesOnly_ = showFavoritesOnly;
+    btnAll_.setToggleState(!showFavoritesOnly, juce::dontSendNotification);
+    btnFav_.setToggleState(showFavoritesOnly,  juce::dontSendNotification);
+    applyFilter();
 }
 
 void PatchBrowserPanel::applyFilter()

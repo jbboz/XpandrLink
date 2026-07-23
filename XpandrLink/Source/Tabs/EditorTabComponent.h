@@ -78,8 +78,11 @@ private:
 
     PatchLibrary patchLibrary_;
     std::unique_ptr<PatchBrowserPanel> patchBrowserPanel_;
+    void ensurePatchBrowserPanel();   // lazily constructs + wires patchBrowserPanel_ if it doesn't exist yet
     void openOrClosePatchBrowser();
     void openMorphBBrowser();
+    void openTimbreSpace();   // snapshot baseline + rebuild the space from the library view
+    void rebuildTimbreSpacePatches();   // rebuild patch set only (Refresh) — leaves Undo baseline alone
     void loadPatchFromHardware(int progNum);  // TASK-05: inline-edit patch number → load from hardware
     void confirmThenRun(const juce::String& title, const juce::String& message,
                         const juce::String& okText, std::function<void()> onConfirm);
@@ -108,9 +111,10 @@ private:
     std::unique_ptr<PatchBrowserPanel>   morphBBrowserPanel_;
     std::unique_ptr<CcMapPanel>          ccMapPanel_;
     std::unique_ptr<MidiSettingsPanel>   midiSettingsPanel_;
+    std::unique_ptr<class TimbreSpacePanel> timbreSpacePanel_;
 
     // Bottom pane toggle buttons (nav bar)
-    juce::TextButton btnMod{"Mod"}, btnAdv{"PAGE2"}, btnRndMorph{"RND/MORPH"}, btnCc{"CC"}, btnMidi{"MIDI"};
+    juce::TextButton btnMod{"Mod"}, btnAdv{"PAGE2"}, btnRndMorph{"RND/MORPH"}, btnSpace{"SPACE"}, btnCc{"CC"}, btnMidi{"MIDI"};
     juce::TextButton btnInit_{"INIT PATCH"}, btnMute_{"MUTE"}, btnTuneAll_{"TUNE ALL"};
     BottomPaneManager bottomPaneManager_;
 

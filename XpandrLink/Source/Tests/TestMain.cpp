@@ -10,7 +10,9 @@
 #include "MidiOutputAutoSelectTest.h"
 #include "ModAmountCoalesceTest.h"
 #include "ModEditDecodeTest.h"
+#include "PatchBlenderTest.h"
 #include "PatchRandomizerSafetyTest.h"
+#include "TimbreSpaceEngineTest.h"
 
 int main()
 {

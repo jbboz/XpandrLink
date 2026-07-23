@@ -31,6 +31,8 @@ These items have committed implementations but no hardware/visual confirmation. 
 
 Master-command buttons is already hardware-validated on macOS — what's left there is minor visual polish and a Windows repeat, not a functional gap. No other open P0 items remain.
 
+**Timbre Space (feature/timbre-space)** — closed 2026-07-22, user-confirmed hardware-validated ("I tested the TS function and its operating as expected", see `docs/TEST-PLAN.md` Session K). The 2-D PCA patch-blending map (scratchpad 99, 300 ms throttle, mod matrix + discrete params always from the dominant patch) works correctly on real hardware. The self-contained-layout decision this closure unblocked is now recorded in [ADR-008](docs/adr/008-timbre-space-self-contained-layout.md).
+
 ---
 
 ## P1 — Maintainability

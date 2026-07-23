@@ -92,6 +92,7 @@ target_sources(XpandrLink PRIVATE
     XpandrLink/Source/UI/FullModMatrixPanel.cpp
     XpandrLink/Source/UI/ModulePanel.cpp
     XpandrLink/Source/UI/TitleBarComponent.cpp
+    XpandrLink/Source/UI/TimbreSpacePanel.cpp
 )
 
 target_include_directories(XpandrLink PRIVATE XpandrLink/Source)

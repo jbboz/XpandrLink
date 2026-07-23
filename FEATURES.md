@@ -79,6 +79,18 @@ invariants) see [SPEC.md](SPEC.md); for end-user workflows see the
   midpoint; the mod matrix stays on A's routing (morphing two matrices produces nonsense).
 - APPLY confirms, UNDO restores A exactly.
 
+## Timbre Space
+
+- 2-D map of the patch library — deterministic PCA-based layout; the same library always
+  produces the same positions and colors.
+- Auto-loads every patch in the library on open; an ALL/FAV scope toggle and a REFRESH
+  button (re-scan the library) are built into the pane, no need to leave it.
+- Drag anywhere to blend the nearest patches (weighted by distance) live to the hardware.
+- Continuous parameters blend; discrete parameters and the mod matrix always come from
+  the single most-weighted nearby patch — never corrupted, always a musically valid patch.
+- Sent to scratchpad slot 99, throttled — other memory slots are never touched.
+- UNDO restores the patch that was active before the pane opened.
+
 ## MIDI
 
 - **MIDI CC automation table** (standalone): map any of 128 CCs to any parameter; incoming

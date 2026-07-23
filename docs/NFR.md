@@ -19,6 +19,7 @@ in each `XpandrLink/Source/Tests/*.h` file.
 | `NFR-TIMING-04` | Program-change-to-dump gap | 100ms between PC and patch-dump request. `kProgramChangeToDumpMs`. |
 | `NFR-TIMING-05` | Mod-amount coalescing window | 50ms (`Oberheim::kModCmdGapMs`) — rapid amount-knob drags coalesce to one send per window. See [ADR-003](adr/003-timer-pacing-coalescing.md). |
 | `NFR-TIMING-06` | Audition debounce | 150ms — arrow-key/◀▶ patch audition debounces before auto-loading, to avoid flooding sends while a user is rapidly stepping through a list. |
+| `NFR-TIMING-07` | Timbre Space drag coalescing | Hardware sends triggered by dragging in the Timbre Space map coalesce to at most one per 300ms (restart-on-move `juce::Timer`, latest position only), bounding the wire rate on this new continuous-send surface exactly as MorphPanel does. Same rationale as [ADR-003](adr/003-timer-pacing-coalescing.md). Verified manually per `docs/TEST-PLAN.md` Session K (no unit test — the throttle lives in a UI Timer with no message loop in the test harness). |
 
 ## Thread safety
 
@@ -43,3 +44,4 @@ in each `XpandrLink/Source/Tests/*.h` file.
 | `NFR-HW-08` | Page/subpage fallback to last-sent | If hardware sends a parameter change with no prior page-select in this session (`currentRxPage`/`currentRxSubPage` still `-1`), fall back to `lastSentPage`/`lastSentMode` (the page XpandrLink itself last sent); if neither is known, the change is dropped rather than misattributed to page 0. |
 | `NFR-HW-09` | Front-panel program nav decode | Matrix-12/Xpander `+`/`-` front-panel buttons send `F0 10 [id] 0E 04/08 F7`, not a MIDI Program Change; `currentProgram` is adjusted ±1 and clamped to `[0, 99]`. |
 | `NFR-HW-10` | SysexID auto-learn | The device-ID byte (`data[1]`) of the first incoming Oberheim SysEx with a different, in-range (`0`-`15`) ID than the current `sysexID` is adopted automatically and notified once via `onSysexIDDetected`, so outgoing SysEx isn't silently ignored by a mismatched device. |
+| `NFR-HW-11` | Timbre Space blend integrity | A Timbre Space blend copies all 60 mod-matrix bytes and every discrete parameter (choices/buttons/bitmask/radioLED) verbatim from the single dominant (highest-weight) patch; only continuous parameters are weighted-averaged. Blending mod bytes or discrete params would synthesize corrupt mod-matrix entries / invalid enum values — the same class as the sessions 55-61 mod-matrix corruption bugs. Verified by `PatchBlenderTest`. |
