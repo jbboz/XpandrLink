@@ -27,6 +27,8 @@ are never overwritten by browsing or editing.
   remove duplicates automatically (content-hash), and audition patches with the arrow keys
 - **Smart randomizer** — musical-safety guardrails keep every roll audible and playable
 - **Tone morphing** — continuously interpolate between two patches, live on the synth
+- **Timbre Space** — a 2-D map of your patch library; drag anywhere to hear a live blend
+  of the nearest patches, sent instantly to the hardware
 - **DAW automation** — record and draw automation lanes for any parameter; the plugin
   streams changes to the synth over its own direct MIDI connection, bypassing DAW SysEx
   filtering (yes, it works in Ableton Live); the current patch restores with your project
@@ -134,6 +136,11 @@ spec), [ROADMAP.md](ROADMAP.md).
   made this project possible. This project follows its author's recommendation to rebuild
   the editor on JUCE, ported to C++ and extended (librarian, randomizer, morphing, plugin
   formats, DAW automation).
+- The **Timbre Space** feature was designed after studying the Timbre Space concept in
+  **[Babu Frik](https://github.com/RitaAndAurora/kijimi-babu-frik)** and
+  **[J.F. Sebastian](https://github.com/RitaAndAurora/ddrm-jfsebastian)** by RitaAndAurora —
+  this project's implementation (deterministic PCA layout, no external ML dependency) is
+  original, not derived from their code.
 - **[JUCE](https://juce.com)** framework (GPLv3 open-source license).
 - **[DSEG](https://github.com/keshikan/DSEG)** 14-segment font by keshikan (SIL OFL 1.1) —
   the VFD display face.

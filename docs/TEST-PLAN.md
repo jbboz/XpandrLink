@@ -472,6 +472,28 @@ auto-select, the greeting) can ever fire.
 
 ---
 
+## Session K — Timbre Space — ✅ PASSED 2026-07-22
+
+User confirmed: "I tested the TS function and its operating as expected." A general
+confirmation of the feature working correctly on hardware, not an item-by-item
+walkthrough of every box below — checked off on that basis.
+
+Preconditions: hardware connected and receiving; library populated with a
+variety of patches (ideally 10+).
+
+- [x] Open the SPACE pane. Coloured dots appear, roughly one per library patch.
+- [x] Click directly on a dot. The editor loads that patch and it sounds like
+      loading it directly (mod matrix + discrete params intact).
+- [x] Drag slowly across the map while holding a note. The timbre changes
+      smoothly; the "BASED ON ..." readout names the contributing patches.
+- [x] Drag FAST across the whole map repeatedly while holding a note. Confirm
+      NO hardware lockup and NO stuck notes (throttle + scratchpad-99 path).
+- [x] Press UNDO. The patch active when the pane opened is restored exactly.
+- [x] Confirm no memory slot other than 99 was written (spot-check a couple of
+      stored programs on the synth are unchanged).
+
+---
+
 ## Recording results
 
 After each session, update [ROADMAP.md](../ROADMAP.md) — remove the row for anything fully

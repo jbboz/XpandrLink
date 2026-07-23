@@ -17,3 +17,4 @@ of bug.
 | [005](005-subpage-paramcol-collision.md) | Subpage paramCol collision dispatch |
 | [006](006-changesource-atomic-edit.md) | CHANGESOURCE atomic mod-matrix source edit |
 | [007](007-activeoutput-locking-invariant.md) | `activeOutput` asymmetric locking invariant |
+| [008](008-timbre-space-self-contained-layout.md) | Timbre Space self-contained PCA layout (no external ML/geometry dependency) |
