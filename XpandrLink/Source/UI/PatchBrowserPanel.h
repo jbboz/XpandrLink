@@ -6,6 +6,7 @@
 */
 #pragma once
 #include <JuceHeader.h>
+#include <vector>
 #include "ThemeData.h"
 #include "../Data/PatchLibrary.h"
 #include "../Engine/MidiEngine.h"
@@ -33,6 +34,18 @@ public:
     // and clobber unrelated state, e.g. Morph's Patch A). Used by the Morph "Load B"
     // browser. Default false = normal load-into-editor behaviour.
     void setSelectOnlyMode(bool b) { selectOnly_ = b; }
+
+    // The patches currently visible under the active filter, in display order.
+    std::vector<PatchEntry> getFilteredEntries() const;
+
+    // Current Favorites/All filter scope.
+    bool isShowingFavoritesOnly() const { return showFavoritesOnly_; }
+
+    // Sets the Favorites/All filter scope, updates the ALL/FAV button visuals
+    // to match, and re-applies the filter. This is the single source of truth
+    // for filter scope — TimbreSpacePanel's own ALL/FAV toggle never stores
+    // this value itself, only renders what it's told.
+    void setShowFavoritesOnly(bool showFavoritesOnly);
 
     // ---- Component overrides ------------------------------------------------
     void visibilityChanged() override;

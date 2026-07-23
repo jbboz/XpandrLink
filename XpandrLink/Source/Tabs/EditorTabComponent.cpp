@@ -3,6 +3,7 @@
 #include "../Data/PatchCodec.h"
 #include "../UI/ModAssignmentLogic.h"
 #include "../UI/ThemeData.h"
+#include "../UI/TimbreSpacePanel.h"
 
 EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLogic)
     : midiEngine(e), modAssignmentLogic(modLogic)
@@ -93,6 +94,27 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
     };
     morphPanel_->onLoadBRequested = [this] { openMorphBBrowser(); };
 
+    timbreSpacePanel_.reset(new TimbreSpacePanel());
+    timbreSpacePanel_->onApply = [this](const std::map<int,int>& params,
+                                        const std::array<uint8_t,60>& mod,
+                                        const juce::String& name)
+    {
+        auto sysex = encodePatchSysex(params, mod.data(), name);
+        midiEngine.setCachedPatch(sysex);
+        midiEngine.broadcastCachedPatch();
+        midiEngine.sendPatchToSynth();
+    };
+    timbreSpacePanel_->onRefreshRequested = [this] { rebuildTimbreSpacePatches(); };
+    timbreSpacePanel_->onScopeToggled = [this](bool wantsFavoritesOnly)
+    {
+        if (!timbreSpacePanel_) return;
+        ensurePatchBrowserPanel();
+        patchBrowserPanel_->setShowFavoritesOnly(wantsFavoritesOnly);
+        rebuildTimbreSpacePatches();
+        timbreSpacePanel_->setScopeState(patchBrowserPanel_->isShowingFavoritesOnly());
+    };
+    addChildComponent(timbreSpacePanel_.get());   // hidden until SPACE selected
+
     rndMorphPanel_.reset(new RndMorphPanel(*randomizerPanel_, *morphPanel_));
     addChildComponent(rndMorphPanel_.get());   // hidden until RND/MORPH selected
 
@@ -120,6 +142,7 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
     styleNavBtn(btnMod);
     styleNavBtn(btnAdv);
     styleNavBtn(btnRndMorph);
+    styleNavBtn(btnSpace);
     styleNavBtn(btnInit_);
     if (isStandalone) styleNavBtn(btnCc);
     styleNavBtn(btnMidi);
@@ -134,6 +157,8 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
     bottomPaneManager_.addPane(&btnMod,      fullModMatrix.get());
     bottomPaneManager_.addPane(&btnAdv,      advancedPanel.get());
     bottomPaneManager_.addPane(&btnRndMorph, rndMorphPanel_.get());
+    bottomPaneManager_.addPane(&btnSpace, timbreSpacePanel_.get(),
+                               [this] { openTimbreSpace(); });
     bottomPaneManager_.addAction(&btnInit_, [this] { initPatchWithConfirm(); });
     if (isStandalone)
         bottomPaneManager_.addPane(&btnCc, ccMapPanel_.get());
@@ -338,7 +363,7 @@ EditorTabComponent::~EditorTabComponent()
     saveSettings();
     midiEngine.removeListener(this);
     // Detach the custom LookAndFeel before it (and the buttons) are destroyed.
-    for (auto* b : { &btnMod, &btnAdv, &btnRndMorph,
+    for (auto* b : { &btnMod, &btnAdv, &btnRndMorph, &btnSpace,
                      &btnInit_, &btnMute_, &btnTuneAll_ })
         b->setLookAndFeel(nullptr);
     btnCc.setLookAndFeel(nullptr);
@@ -410,35 +435,39 @@ void EditorTabComponent::tuneAllWithConfirm()
                    [this] { midiEngine.sendTuneAll(); });
 }
 
+void EditorTabComponent::ensurePatchBrowserPanel()
+{
+    if (patchBrowserPanel_) return;
+
+    patchBrowserPanel_ = std::make_unique<PatchBrowserPanel>(patchLibrary_, midiEngine);
+    addChildComponent(*patchBrowserPanel_);   // hidden until toggled — so the first
+                                              // click's show=!isVisible() opens it (1 click)
+
+    patchBrowserPanel_->onClose = [this] {
+        patchBrowserPanel_->setVisible(false);
+    };
+
+    patchBrowserPanel_->onPatchLoaded = [this](const PatchEntry&, int) {
+        // VFD label is updated automatically via onPatchReceived when the new patch broadcasts
+    };
+
+    patchBrowserPanel_->onPatchRenamed = [this](const juce::String& newName) {
+        currentPatchName = newName.substring(0, 8).toUpperCase();
+        titleBar_->setPatchName(currentPatchName);
+    };
+
+    patchBrowserPanel_->getCurrentSysex = [this]() -> std::vector<uint8_t> {
+        auto sysex = buildCurrentPatchSysex();
+        midiEngine.setCachedPatch(sysex);
+        return sysex;
+    };
+
+    patchBrowserPanel_->getCurrentPatchName = [this]() { return currentPatchName; };
+}
+
 void EditorTabComponent::openOrClosePatchBrowser()
 {
-    if (!patchBrowserPanel_)
-    {
-        patchBrowserPanel_ = std::make_unique<PatchBrowserPanel>(patchLibrary_, midiEngine);
-        addChildComponent(*patchBrowserPanel_);   // hidden until toggled — so the first
-                                                  // click's show=!isVisible() opens it (1 click)
-
-        patchBrowserPanel_->onClose = [this] {
-            patchBrowserPanel_->setVisible(false);
-        };
-
-        patchBrowserPanel_->onPatchLoaded = [this](const PatchEntry&, int) {
-            // VFD label is updated automatically via onPatchReceived when the new patch broadcasts
-        };
-
-        patchBrowserPanel_->onPatchRenamed = [this](const juce::String& newName) {
-            currentPatchName = newName.substring(0, 8).toUpperCase();
-            titleBar_->setPatchName(currentPatchName);
-        };
-
-        patchBrowserPanel_->getCurrentSysex = [this]() -> std::vector<uint8_t> {
-            auto sysex = buildCurrentPatchSysex();
-            midiEngine.setCachedPatch(sysex);
-            return sysex;
-        };
-
-        patchBrowserPanel_->getCurrentPatchName = [this]() { return currentPatchName; };
-    }
+    ensurePatchBrowserPanel();
 
     bool show = !patchBrowserPanel_->isVisible();
     if (show)
@@ -497,6 +526,69 @@ void EditorTabComponent::openMorphBBrowser()
     {
         morphBBrowserPanel_->setVisible(false);
     }
+}
+
+void EditorTabComponent::openTimbreSpace()
+{
+    if (!timbreSpacePanel_) return;
+
+    // Baseline = the patch currently active in the editor, for Undo. Only taken
+    // on open (not on Refresh) — Refresh changes what's ON the map, not the
+    // patch Undo should return to.
+    timbreSpacePanel_->setBaseline(currentParamMap(), currentModBytes(), currentPatchName);
+
+    // The library browser is normally only constructed the first time the user
+    // opens it (openOrClosePatchBrowser()); Timbre Space must not depend on that
+    // ever having happened, so ensure it exists and re-read the DB now.
+    ensurePatchBrowserPanel();
+    patchBrowserPanel_->refresh();
+
+    timbreSpacePanel_->setScopeState(patchBrowserPanel_->isShowingFavoritesOnly());
+
+    rebuildTimbreSpacePatches();
+}
+
+void EditorTabComponent::rebuildTimbreSpacePatches()
+{
+    if (!timbreSpacePanel_) return;
+
+    // Build the TimbrePatch list from the current library view.
+    auto entries = patchBrowserPanel_ ? patchBrowserPanel_->getFilteredEntries()
+                                      : std::vector<PatchEntry>{};
+    std::vector<TimbrePatch> patches;
+    patches.reserve(entries.size());
+
+    int idCounter = 0;
+    const size_t kMax = 500;   // cap for layout performance
+    for (const auto& e : entries)
+    {
+        if (patches.size() >= kMax) break;
+        juce::MemoryBlock data;
+        if (!e.file.loadFileAsData(data)) continue;
+        if (data.getSize() != 399) continue;
+        const uint8_t* sx = (const uint8_t*)data.getData();
+        if (sx[0] != 0xF0 || sx[398] != 0xF7) continue;
+
+        // Unpack packed[6..] -> 196 raw bytes (same as MorphPanel::unpackSysex).
+        std::vector<uint8_t> raw(196);
+        const uint8_t* packed = sx + 6;
+        for (int i = 0; i < 196; ++i)
+        {
+            uint8_t lo = packed[2 * i], hi = packed[2 * i + 1];
+            raw[(size_t)i] = (uint8_t)(((hi & 0x01) << 7) | (lo & 0x7F));
+        }
+
+        TimbrePatch tp;
+        tp.libraryId = idCounter++;
+        tp.params    = PatchCodec::decode(raw);
+        for (int i = 0; i < 60; ++i) tp.modBytes[(size_t)i] = raw[(size_t)(128 + i)];
+        juce::String nm;
+        for (int i = 188; i < 196; ++i) nm += (char)(raw[(size_t)i] & 0x7F);
+        tp.name = nm.trimEnd();
+        patches.push_back(std::move(tp));
+    }
+
+    timbreSpacePanel_->setPatches(std::move(patches));
 }
 
 void EditorTabComponent::onMidiActivity(bool isInput)
