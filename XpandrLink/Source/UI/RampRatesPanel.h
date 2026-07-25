@@ -7,6 +7,12 @@
 #pragma once
 #include <JuceHeader.h>
 #include "HardwareComponents.h"
+#include "HardwareComboBoxLookAndFeel.h"
+#include "HardwareKnob.h"
+#include "HardwareMenu.h"
+#include "VfdPopupList.h"
+#include "VfdDropdown.h"
+#include "WaveformButton.h"
 #include "ThemeData.h"
 #include "ModAssignmentLogic.h"
 #include "../Data/XpanderData.h"
