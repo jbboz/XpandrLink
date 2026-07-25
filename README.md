@@ -36,6 +36,8 @@ are never overwritten by browsing or editing.
   output auto-selects too whenever it's unambiguous (a single MIDI interface, or one whose
   output shares the input's name) — otherwise pick it once in the MIDI pane
 
+  **[User Guide](XpandrLink-User-Guide.md)**.
+
 ## Download
 
 ### [**Get the latest release →**](../../releases)
