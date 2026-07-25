@@ -4,6 +4,12 @@
 #include "../Data/XpanderData.h"
 #include "ThemeData.h"
 #include "HardwareComponents.h"
+#include "HardwareComboBoxLookAndFeel.h"
+#include "HardwareKnob.h"
+#include "HardwareMenu.h"
+#include "VfdPopupList.h"
+#include "VfdDropdown.h"
+#include "WaveformButton.h"
 
 // CC automation table: maps MIDI CC numbers (0-127) to Xpander parameters.
 // Incoming CC from non-synth inputs is scaled to the param range and broadcast

@@ -82,12 +82,20 @@ target_sources(XpandrLink PRIVATE
     XpandrLink/Source/Engine/MidiEngine.cpp
     XpandrLink/Source/Engine/MidiSendQueue.cpp
     XpandrLink/Source/Data/PatchLibrary.cpp
+    XpandrLink/Source/Data/PatchSysexFile.cpp
     XpandrLink/Source/Tabs/EditorTabComponent.cpp
     XpandrLink/Source/Tabs/LibraryTabComponent.cpp
+    XpandrLink/Source/Tabs/PatchOrchestrator.cpp
     XpandrLink/Source/Plugin/XpandrLinkAudioProcessor.cpp
     XpandrLink/Source/Plugin/XpandrLinkAudioProcessorEditor.cpp
-    XpandrLink/Source/UI/HardwareComponents.cpp
+    XpandrLink/Source/UI/HardwareComboBoxLookAndFeel.cpp
+    XpandrLink/Source/UI/HardwareKnob.cpp
+    XpandrLink/Source/UI/HardwareMenu.cpp
+    XpandrLink/Source/UI/VfdPopupList.cpp
+    XpandrLink/Source/UI/VfdDropdown.cpp
+    XpandrLink/Source/UI/WaveformButton.cpp
     XpandrLink/Source/UI/PatchBrowserPanel.cpp
+    XpandrLink/Source/UI/PatchBrowserPanelActions.cpp
     XpandrLink/Source/UI/ModSummaryPanel.cpp
     XpandrLink/Source/UI/FullModMatrixPanel.cpp
     XpandrLink/Source/UI/ModulePanel.cpp
@@ -142,10 +150,17 @@ target_sources(XpandrLink_Tests PRIVATE
     XpandrLink/Source/Tests/TestMain.cpp
     XpandrLink/Source/Engine/MidiEngine.cpp
     XpandrLink/Source/Engine/MidiSendQueue.cpp
+    XpandrLink/Source/Tabs/PatchOrchestrator.cpp
     XpandrLink/Source/Data/PatchLibrary.cpp
+    XpandrLink/Source/Data/PatchSysexFile.cpp
     XpandrLink/Source/UI/ModSummaryPanel.cpp
     XpandrLink/Source/UI/FullModMatrixPanel.cpp
-    XpandrLink/Source/UI/HardwareComponents.cpp
+    XpandrLink/Source/UI/HardwareComboBoxLookAndFeel.cpp
+    XpandrLink/Source/UI/HardwareKnob.cpp
+    XpandrLink/Source/UI/HardwareMenu.cpp
+    XpandrLink/Source/UI/VfdPopupList.cpp
+    XpandrLink/Source/UI/VfdDropdown.cpp
+    XpandrLink/Source/UI/WaveformButton.cpp
 )
 
 target_include_directories(XpandrLink_Tests PRIVATE XpandrLink/Source)

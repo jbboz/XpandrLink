@@ -9,6 +9,12 @@
 #include <JuceHeader.h>
 #include "ThemeData.h"
 #include "HardwareComponents.h"
+#include "HardwareComboBoxLookAndFeel.h"
+#include "HardwareKnob.h"
+#include "HardwareMenu.h"
+#include "VfdPopupList.h"
+#include "VfdDropdown.h"
+#include "WaveformButton.h"
 #include "ModAmountEditor.h"
 #include "ModAssignmentLogic.h"
 #include "../Data/XpanderData.h"
