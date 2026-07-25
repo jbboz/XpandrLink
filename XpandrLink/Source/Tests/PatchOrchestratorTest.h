@@ -9,6 +9,8 @@
 #include <JuceHeader.h>
 #include "../Tabs/PatchOrchestrator.h"
 #include "../Engine/MidiEngine.h"
+#include "../Data/OberheimDefs.h"
+#include "MockMidiBackend.h"
 
 class PatchOrchestratorTest : public juce::UnitTest
 {
@@ -103,6 +105,71 @@ public:
             auto cached   = engine.getCachedPatch();
             auto expected = orch.encodePatchSysex({ {2, 10} }, mod.data(), "ROLLED  ");
             expect(cached == expected, "applyPatch must cache the patch it just encoded");
+        }
+
+        beginTest("applyPatch sends All-Notes-Off before the patch dump reaches the wire, targeting the scratchpad slot");
+        {
+            auto mockPtr = std::make_unique<MockMidiBackend>();
+            auto& mock = *mockPtr;
+            MidiEngine engine{ std::move(mockPtr) };
+            engine.setMidiOutput("Fake Synth");
+
+            PatchOrchestrator orch(engine, [] { return std::map<int,int>{}; },
+                                          [] { return std::array<uint8_t,60>{}; },
+                                          [] { return juce::String("ROLLED  "); });
+
+            std::array<uint8_t,60> mod{};
+            orch.applyPatch({ {2, 10} }, mod);
+
+            // sendAllNotesOff() sends synchronously (no queue); sendPatchToSynth() enqueues.
+            // Immediately after applyPatch() returns, only the All-Notes-Off should be on the wire.
+            expectEquals((int)mock.sentMessages.size(), 1, "All-Notes-Off sends immediately; the patch dump is still queued");
+            expect(mock.sentMessages[0].isAllNotesOff(), "the one immediate message must be All-Notes-Off (TASK-07 stuck-note fix)");
+
+            // Drain the queue to observe the patch dump land afterward.
+            for (int elapsed = 0; elapsed < 400; elapsed += 10)
+            {
+                engine.drainSendQueueForTest();
+                juce::Thread::sleep(10);
+            }
+            engine.drainSendQueueForTest();
+
+            expect(mock.sentMessages.size() >= 2, "the queued patch dump must eventually reach the wire too");
+            auto& dump = mock.sentMessages[1];
+            expect(dump.isSysEx(), "the queued message is the patch dump SysEx");
+            // getSysExData() is F0-stripped by MidiEngine::sendSysex/createSysExMessage, so the
+            // program-number byte at full-sysex offset 5 lands at getSysExData()[4] (see
+            // MidiEngineSendPathTest.h's "redirects to the scratchpad slot" case for the same offset).
+            expectEquals((int)dump.getSysExData()[4], Oberheim::kScratchpadProgram,
+                        "BUG-32: the dump must target the scratchpad slot, never the patch's own stored slot");
+        }
+
+        beginTest("revert() restores the snapshot through the same send path (queued dump to the scratchpad slot)");
+        {
+            auto mockPtr = std::make_unique<MockMidiBackend>();
+            auto& mock = *mockPtr;
+            MidiEngine engine{ std::move(mockPtr) };
+            engine.setMidiOutput("Fake Synth");
+
+            PatchOrchestrator orch(engine, [] { return std::map<int,int>{}; },
+                                          [] { return std::array<uint8_t,60>{}; },
+                                          [] { return juce::String("BEFORE  "); });
+
+            orch.snapshotForRevert();
+            orch.revert();
+
+            for (int elapsed = 0; elapsed < 400; elapsed += 10)
+            {
+                engine.drainSendQueueForTest();
+                juce::Thread::sleep(10);
+            }
+            engine.drainSendQueueForTest();
+
+            expect(!mock.sentMessages.empty(), "revert must actually send the restored patch");
+            auto& dump = mock.sentMessages[0];
+            expect(dump.isSysEx(), "revert sends the restored patch as a SysEx dump");
+            expectEquals((int)dump.getSysExData()[4], Oberheim::kScratchpadProgram,
+                        "revert also routes through the scratchpad slot, same as any other load");
         }
     }
 };
