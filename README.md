@@ -115,8 +115,9 @@ Full instructions: **[User Guide](XpandrLink-User-Guide.md)**.
 
 The original 100-patch factory banks for both synths — each zipped with the full bank dump
 plus every patch as an individual `.syx` file, ready to import straight into the
-[Patch Library](XpandrLink-User-Guide.md#5-patch-library) — are attached as **Assets** on the
-[latest release](../../releases/latest), alongside the app downloads.
+[Patch Library](XpandrLink-User-Guide.md#5-patch-library) — are attached as **Assets** on a
+dedicated [Factory Patch Banks release](../../releases/tag/factory-patches), separate from
+the app downloads.
 
 ## Building from source
 
