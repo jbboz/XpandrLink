@@ -2,7 +2,7 @@
 
 Forward-looking work only. Closed work is recorded in commit history. For the product itself, see [SPEC.md](SPEC.md).
 
-**Last reconciled:** 2026-07-14, branch `main`.
+**Last reconciled:** 2026-07-25, branch `main`.
 
 > **Release gate (v1.0.0 / XpandrLink launch):** ✅ **PASSED.** [`docs/TEST-PLAN.md`](docs/TEST-PLAN.md)
 > Sessions **A** (Matrix-12 hardware), **B** (Xpander per-feature coverage), **C** (morphing),
@@ -36,6 +36,17 @@ Master-command buttons is already hardware-validated on macOS — what's left th
 ---
 
 ## P1 — Maintainability
+
+**No open P1 items remain (2026-07-25).** Every item this section enumerates — TASK-13a, TASK-13b
+(all three steps, including the previously-deferred `PatchOrchestrator`), the CMake/`ctest` test
+wiring, Windows build verification, and all four Phase 4 file-decomposition candidates — is done.
+The only not-yet-started pieces of the original 8-phase code-quality plan are Phase 5 (worker-thread
+modernization, deferred indefinitely per independent review — no concrete problem currently driving
+it) and Phase 6 (code-coverage tooling, low priority) — see
+[`docs/plans/2026-07-16-code-quality-improvement-plan.md`](docs/plans/2026-07-16-code-quality-improvement-plan.md)
+for both; neither has been promoted to a tracked ROADMAP item. `EditorTabComponent.cpp` remains one
+of the largest files in the tree (barely shrank in the Phase 4 pass — see below) and is the most
+likely candidate for a future P1 item if one gets opened.
 
 ### Code-quality / architecture improvement plan (2026-07-16)
 
@@ -212,6 +223,6 @@ Recommended order: MIDI-1 first (highest value, lowest risk), then MIDI-2, then 
 ## Process Notes
 
 - All P0 items are validation, not coding. They should be batched into one hardware session, not interleaved with feature work.
-- P1 items (header split + EditorTabComponent decomposition + tests) are a single PR's worth of architectural cleanup. Do them together so re-validation is one cycle.
+- P1 is currently empty (2026-07-25) — see the note at the top of that section. If a new P1 item opens, prefer batching same-shaped mechanical cleanups together (as Phase 4's four file-decomposition tasks were) so re-validation is one cycle.
 - P2 items are independent — pick up individually as needed.
 - Roadmap moves an item from open to closed when (a) committed AND (b) validated (for P0) or merged (for others). Closed items go to commit history; this file is not an archive.
