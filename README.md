@@ -111,6 +111,15 @@ For the VST3 (no run prompt like the app gets — a DAW just won't load it): rig
 
 Full instructions: **[User Guide](XpandrLink-User-Guide.md)**.
 
+## Factory patch banks
+
+[`Resources/FactoryPatches/`](Resources/FactoryPatches/) has the original 100-patch factory
+banks for both synths, each zipped with the full bank dump plus every patch as an individual
+`.syx` file (ready to import straight into the [Patch Library](XpandrLink-User-Guide.md#5-patch-library)):
+
+- [**Xpander**](Resources/FactoryPatches/XpandrLink-FactoryPatches-Xpander.zip)
+- [**Matrix-12**](Resources/FactoryPatches/XpandrLink-FactoryPatches-Matrix12.zip)
+
 ## Building from source
 
 Requires CMake 3.22+, a C++17 toolchain, and [JUCE 8](https://github.com/juce-framework/JUCE)

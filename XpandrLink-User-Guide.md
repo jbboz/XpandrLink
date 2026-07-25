@@ -417,7 +417,12 @@ Click **Import** and choose a `.syx` file. XpandrLink automatically detects sing
 - **Single patch**: prompted for a description, then added to the library.
 - **Bank file**: each patch is extracted individually; you are prompted for a description that applies to all patches in the bank.
 
-
+**Need patches to start with?** The repo ships the original 100-patch factory banks for
+both synths, zipped with the bank dump plus every patch as an individual `.syx` file, in
+[`Resources/FactoryPatches/`](Resources/FactoryPatches/)
+([Xpander](Resources/FactoryPatches/XpandrLink-FactoryPatches-Xpander.zip) /
+[Matrix-12](Resources/FactoryPatches/XpandrLink-FactoryPatches-Matrix12.zip)). Unzip and
+import either the bank file or the `single/` folder's individual patches.
 
 ### Footer Actions
 
