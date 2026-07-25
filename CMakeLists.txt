@@ -90,6 +90,7 @@ target_sources(XpandrLink PRIVATE
     XpandrLink/Source/Plugin/XpandrLinkAudioProcessorEditor.cpp
     XpandrLink/Source/UI/HardwareComponents.cpp
     XpandrLink/Source/UI/PatchBrowserPanel.cpp
+    XpandrLink/Source/UI/PatchBrowserPanelActions.cpp
     XpandrLink/Source/UI/ModSummaryPanel.cpp
     XpandrLink/Source/UI/FullModMatrixPanel.cpp
     XpandrLink/Source/UI/ModulePanel.cpp
