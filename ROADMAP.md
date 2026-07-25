@@ -75,9 +75,22 @@ send-queue/pacing machinery out of `MidiEngine` into a new `MidiSendQueue` class
 mod-amount coalescing and ADR-007's `IMidiBackend`/locking discipline stay untouched on
 `MidiEngine`, same drain algorithm and lock/no-lock shape at every send-path call site. Same
 code as the already hardware-validated version (rapid mod-amount drag, page-select-heavy
-sequences, patch store/dump round-trip), ported verbatim. Remaining Phase 4 candidates
-(`EditorTabComponent.cpp`, `PatchBrowserPanel.cpp`, `PatchLibrary.cpp`,
-`HardwareComponents.cpp`) not yet started.
+sequences, patch store/dump round-trip), ported verbatim. **All four remaining Phase 4
+candidates landed 2026-07-24.** `PatchLibrary.cpp` (754 → 628 lines) had its SysEx-file
+utilities (block validation, hashing, name embed/extract, bank extraction, dedup-safe copy)
+pulled into a new `PatchSysexFile.h`/`.cpp`. `PatchBrowserPanel.cpp` (808 → 454 lines) had its
+footer-button actions split out into a new 360-line `PatchBrowserPanelActions.cpp`, leaving the
+original file to own view/list-rendering only. `HardwareComponents.cpp` (735 lines) was deleted
+outright and split into one `.h`/`.cpp` pair per class (`HardwareKnob`, `HardwareMenu`,
+`HardwareComboBoxLookAndFeel`, `VfdDropdown`, `VfdPopupList`, `WaveformButton` — six pairs in
+all). `EditorTabComponent.cpp` only shrank from 1197 to ~1144 lines (about 4%) — a genuine
+decomposition wasn't the point there; its real payoff was testability, via
+**TASK-13b step 3, `PatchOrchestrator`** (see below), which pulled the patch-assemble/cache/
+broadcast/send-plus-one-level-undo logic used by the randomizer, morph, and library load out
+into a class with zero `juce::Component` dependencies and direct unit-test coverage
+(`PatchOrchestratorTest.h`), something the UI-entangled original code could not get. Given how
+little `EditorTabComponent.cpp` itself shrank, it remains one of the largest files in the tree
+and a candidate for further decomposition later.
 
 **ASan hang — root-caused, resolved as environmental, not a code bug (2026-07-16)**: `XpandrLink_Tests`
 built with `-fsanitize=address` spun at ~100% CPU with zero output for 2.5+ minutes (uninstrumented build
@@ -111,7 +124,7 @@ Was 1134 lines → now ~817 lines.
 
 - **Step 1 — TitleBarComponent**: `TitleBarComponent.h` + `.cpp`. Push-in/callback-out: `setPatchName`, `setProgramNumber`, `flashMidiLed`; callbacks `onPrevClicked`, `onNextClicked`, `onLibraryClicked`, `onPatchNumberEdited`. `MidiActivityIndicator` moved here.
 - **Step 2 — BottomPaneManager**: `BottomPaneManager.h` (header-only). Owns pane open/close state, nav-button layout, per-pane `onOpen` callbacks. `#if JucePlugin_Build_Standalone` blocks reduced from 11 → 6.
-- **Step 3 — PatchOrchestrator**: deferred/optional. Would extract the encode/cache/broadcast/send pattern from randomizer + morph + library load. Not started.
+- **Step 3 — PatchOrchestrator**: ✅ DONE (2026-07-24). Extracted the encode/cache/broadcast/send pattern shared by the randomizer, morph, and library-load one-level-undo into [`PatchOrchestrator.h`](XpandrLink/Source/Tabs/PatchOrchestrator.h)/`.cpp`. Live UI state (param map, mod bytes, patch name) is read through injected callbacks, so the class has zero `juce::Component` dependencies and is fully unit-tested directly (`XpandrLink/Source/Tests/PatchOrchestratorTest.h`), including `MockMidiBackend`-based send-path coverage confirming the TASK-07 All-Notes-Off-before-dump ordering and the BUG-32 scratchpad-slot redirect on both `applyPatch()` and `revert()`.
 
 ### ~~Wire unit tests into CMake~~ ✅ DONE (2026-06-28)
 
