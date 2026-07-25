@@ -10,6 +10,7 @@
 #include "MidiOutputAutoSelectTest.h"
 #include "ModAmountCoalesceTest.h"
 #include "ModEditDecodeTest.h"
+#include "PatchOrchestratorTest.h"
 #include "PatchBlenderTest.h"
 #include "PatchRandomizerSafetyTest.h"
 #include "PatchSysexFileTest.h"

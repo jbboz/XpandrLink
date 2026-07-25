@@ -7,6 +7,10 @@
 
 EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLogic)
     : midiEngine(e), modAssignmentLogic(modLogic)
+    , patchOrchestrator_(midiEngine,
+                        [this] { return currentParamMap(); },
+                        [this] { return currentModBytes(); },
+                        [this] { return currentPatchName; })
 {
     addAndMakeVisible(midiInputSelector);
     midiInputSelector.addItemList(midiEngine.getMidiInputs(), 1);
@@ -87,7 +91,7 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
     morphPanel_->onApply = [this](const std::map<int,int>& params,
                                   const std::array<uint8_t,60>& mod,
                                   const juce::String& name) {
-        auto sysex = encodePatchSysex(params, mod.data(), name);
+        auto sysex = patchOrchestrator_.encodePatchSysex(params, mod.data(), name);
         midiEngine.setCachedPatch(sysex);
         midiEngine.broadcastCachedPatch();
         midiEngine.sendPatchToSynth();
@@ -99,7 +103,7 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
                                         const std::array<uint8_t,60>& mod,
                                         const juce::String& name)
     {
-        auto sysex = encodePatchSysex(params, mod.data(), name);
+        auto sysex = patchOrchestrator_.encodePatchSysex(params, mod.data(), name);
         midiEngine.setCachedPatch(sysex);
         midiEngine.broadcastCachedPatch();
         midiEngine.sendPatchToSynth();
@@ -898,100 +902,43 @@ std::array<uint8_t,60> EditorTabComponent::currentModBytes() const
     return mod;
 }
 
-std::vector<uint8_t> EditorTabComponent::encodePatchSysex(const std::map<int,int>& params,
-                                                          const uint8_t* modBytes,
-                                                          const juce::String& nameIn) const
-{
-    std::vector<uint8_t> raw = PatchCodec::encode(params);  // 196 bytes (mod region = 0)
-
-    // Mod matrix (bytes 128–187): PatchCodec::encode leaves these zero, so write the
-    // caller's 60-byte block (preserved-from-load for saves, randomized for rolls).
-    if (modBytes != nullptr)
-        for (int i = 0; i < 60; ++i)
-            raw[(size_t)(128 + i)] = modBytes[i];
-
-    // Patch name into bytes 188–195 (8 ASCII chars, space-padded)
-    {
-        juce::String name = nameIn;
-        name = (name == "--------") ? "        " : name.substring(0, 8).paddedRight(' ', 8);
-        for (int i = 0; i < 8; ++i)
-            raw[(size_t)(188 + i)] = (uint8_t)(name[i] & 0x7F);
-    }
-
-    // Pack each byte into two 7-bit MIDI bytes, wrap in SysEx header.
-    // Format: F0 10 [sysexID] 01 00 00 [392 packed bytes] F7 = 399 bytes total
-    std::vector<uint8_t> sysex;
-    sysex.reserve(399);
-    sysex.push_back(0xF0);
-    sysex.push_back(0x10);
-    sysex.push_back((uint8_t)midiEngine.getSysexID());
-    sysex.push_back(0x01);  // single patch dump command
-    sysex.push_back(0x00);
-    sysex.push_back(0x00);  // program 0 = edit buffer
-    for (uint8_t b : raw)
-    {
-        sysex.push_back(b & 0x7F);          // lo: bits 0-6
-        sysex.push_back((b >> 7) & 0x01);   // hi: bit 7
-    }
-    sysex.push_back(0xF7);
-
-    jassert(sysex.size() == 399);
-    return sysex;
-}
-
 std::vector<uint8_t> EditorTabComponent::buildCurrentPatchSysex() const
 {
-    auto mod = currentModBytes();
-    return encodePatchSysex(currentParamMap(), mod.data(), currentPatchName);
+    return patchOrchestrator_.buildCurrentPatchSysex();
 }
 
 // --- Randomizer (TASK-0) ----------------------------------------------------
 // A roll = produce a randomized 399-byte patch, then run it through the normal
 // load path (UI update) + send path (hardware scratchpad 99), exactly like a
 // loaded patch. A one-level snapshot taken before each roll powers Revert.
-void EditorTabComponent::applyRandomizedPatch(const std::map<int,int>& params,
-                                              const std::array<uint8_t,60>& modBytes)
-{
-    auto sysex = encodePatchSysex(params, modBytes.data(), currentPatchName);
-    midiEngine.setCachedPatch(sysex);   // 399-byte cache
-    midiEngine.broadcastCachedPatch();  // drives UI via onPatchReceived (params + mod summary + name)
-    // TASK-07: swapping patches on the synth while a note is held/sustaining can leave
-    // that voice's gate orphaned on this hardware (reported as "stuck notes" after
-    // repeated randomize rolls). Silence everything right before the new patch lands.
-    midiEngine.sendAllNotesOff();
-    midiEngine.sendPatchToSynth();      // → hardware scratchpad slot 99 (BUG-32)
-}
 
 void EditorTabComponent::doNudge()
 {
     auto cfg = randomizerPanel_->getConfig();
-    revertSysex_ = buildCurrentPatchSysex();            // snapshot for one-level undo
+    patchOrchestrator_.snapshotForRevert();
     juce::Random rng((juce::int64) juce::Time::getHighResolutionTicks());
     auto params = PatchRandomizer::nudge(currentParamMap(), cfg, rng);
-    applyRandomizedPatch(params, currentModBytes());    // nudge leaves the mod matrix as-is
+    patchOrchestrator_.applyPatch(params, currentModBytes());    // nudge leaves the mod matrix as-is
     randomizerPanel_->setRevertEnabled(true);
 }
 
 void EditorTabComponent::doRandomize()
 {
     auto cfg = randomizerPanel_->getConfig();
-    revertSysex_ = buildCurrentPatchSysex();
+    patchOrchestrator_.snapshotForRevert();
     juce::Random rng((juce::int64) juce::Time::getHighResolutionTicks());
     auto params = PatchRandomizer::randomize(currentParamMap(), cfg, rng);
     auto mod    = cfg.isOn(PatchRandomizer::MOD)
                     ? PatchRandomizer::randomizeModBytes(currentModBytes(), cfg, rng)
                     : currentModBytes();
-    applyRandomizedPatch(params, mod);
+    patchOrchestrator_.applyPatch(params, mod);
     randomizerPanel_->setRevertEnabled(true);
 }
 
 void EditorTabComponent::doRevert()
 {
-    if (revertSysex_.size() != 399) return;
-    midiEngine.setCachedPatch(revertSysex_);
-    midiEngine.broadcastCachedPatch();
-    midiEngine.sendPatchToSynth();
-    revertSysex_.clear();
+    if (!patchOrchestrator_.canRevert()) return;
+    patchOrchestrator_.revert();
     randomizerPanel_->setRevertEnabled(false);
 }
 

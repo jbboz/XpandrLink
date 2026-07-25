@@ -7,6 +7,7 @@
 #include <array>
 #include "../Engine/MidiEngine.h"
 #include "../UI/ModAssignmentLogic.h"
+#include "PatchOrchestrator.h"
 #include "../UI/VoiceArchitectureComponent.h"
 #include "../UI/FullModMatrixPanel.h"
 #include "../UI/AdvancedParamsPanel.h"
@@ -55,22 +56,16 @@ private:
     // ---- Patch assembly (shared by save and randomizer) --------------------
     // Current {paramID -> value} from lastRawPatch overlaid with live UI values.
     std::map<int,int> currentParamMap() const;
-    // Pack a param map + 60-byte mod region + name into a 399-byte single-patch SysEx.
-    std::vector<uint8_t> encodePatchSysex(const std::map<int,int>& params,
-                                          const uint8_t* modBytes,
-                                          const juce::String& name) const;
 
     // ---- Randomizer (TASK-0) -----------------------------------------------
     void doNudge();
     void doRandomize();
     void doRevert();
-    void applyRandomizedPatch(const std::map<int,int>& params,
-                              const std::array<uint8_t,60>& modBytes);
     std::array<uint8_t,60> currentModBytes() const;
-    std::vector<uint8_t> revertSysex_;   // one-level undo snapshot (pre-roll patch)
 
     MidiEngine&         midiEngine;
     ModAssignmentLogic& modAssignmentLogic;
+    PatchOrchestrator   patchOrchestrator_;
     std::unique_ptr<juce::PropertiesFile> appProperties;
 
     // Declared before the buttons so it outlives them (members destruct in reverse order).

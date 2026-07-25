@@ -85,6 +85,7 @@ target_sources(XpandrLink PRIVATE
     XpandrLink/Source/Data/PatchSysexFile.cpp
     XpandrLink/Source/Tabs/EditorTabComponent.cpp
     XpandrLink/Source/Tabs/LibraryTabComponent.cpp
+    XpandrLink/Source/Tabs/PatchOrchestrator.cpp
     XpandrLink/Source/Plugin/XpandrLinkAudioProcessor.cpp
     XpandrLink/Source/Plugin/XpandrLinkAudioProcessorEditor.cpp
     XpandrLink/Source/UI/HardwareComponents.cpp
@@ -143,6 +144,7 @@ target_sources(XpandrLink_Tests PRIVATE
     XpandrLink/Source/Tests/TestMain.cpp
     XpandrLink/Source/Engine/MidiEngine.cpp
     XpandrLink/Source/Engine/MidiSendQueue.cpp
+    XpandrLink/Source/Tabs/PatchOrchestrator.cpp
     XpandrLink/Source/Data/PatchLibrary.cpp
     XpandrLink/Source/Data/PatchSysexFile.cpp
     XpandrLink/Source/UI/ModSummaryPanel.cpp
