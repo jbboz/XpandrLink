@@ -113,12 +113,10 @@ Full instructions: **[User Guide](XpandrLink-User-Guide.md)**.
 
 ## Factory patch banks
 
-[`Resources/FactoryPatches/`](Resources/FactoryPatches/) has the original 100-patch factory
-banks for both synths, each zipped with the full bank dump plus every patch as an individual
-`.syx` file (ready to import straight into the [Patch Library](XpandrLink-User-Guide.md#5-patch-library)):
-
-- [**Xpander**](Resources/FactoryPatches/XpandrLink-FactoryPatches-Xpander.zip)
-- [**Matrix-12**](Resources/FactoryPatches/XpandrLink-FactoryPatches-Matrix12.zip)
+The original 100-patch factory banks for both synths — each zipped with the full bank dump
+plus every patch as an individual `.syx` file, ready to import straight into the
+[Patch Library](XpandrLink-User-Guide.md#5-patch-library) — are attached as **Assets** on the
+[latest release](../../releases/latest), alongside the app downloads.
 
 ## Building from source
 
