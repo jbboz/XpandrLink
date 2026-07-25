@@ -24,7 +24,7 @@ are never overwritten by browsing or editing.
   envelope visualizers, PAGE 2 advanced flags, and a hardware-faithful VFD interface
 - **Mod matrix** — click-to-assign 20-slot routing with destination LEDs
 - **Patch librarian** — import all of your `.syx` files and bank dumps, flag and
-  remove duplicates automatically (content-hash), and audition patches with the arrow keys
+  remove duplicates automatically (content-hash), and audition patches with the arrow buttons
 - **Smart randomizer** — musical-safety guardrails keep every roll audible and playable
 - **Tone morphing** — continuously interpolate between two patches, live on the synth
 - **Timbre Space** — a 2-D map of your patch library; drag anywhere to hear a live blend
