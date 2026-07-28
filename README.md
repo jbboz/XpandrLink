@@ -47,7 +47,7 @@ page has direct download links for both platforms plus first-launch instructions
 
 | Platform | Formats | Requirements |
 |---|---|---|
-| macOS 13+ | Standalone, AU (`aufx`), VST3 | Apple Silicon or Intel |
+| macOS 12+ | Standalone, AU (`aufx`), VST3 | Apple Silicon or Intel |
 | Windows 10/11 x64 | Standalone, VST3 | — |
 
 Install plugins to the usual locations (`/Library/Audio/Plug-Ins/Components` for AU,

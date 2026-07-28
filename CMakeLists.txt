@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.22)
 
 # macOS deployment target — must be set BEFORE project() so it applies to all
 # targets (replaces patch [1] in post_projucer_patch.sh, which forced 10.13 -> 13.0).
-set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
+# Lowered to 12.0 (Monterey) per issue #6 — JUCE 8 supports it natively.
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum macOS version")
 
 project(XpandrLink VERSION 1.0.0 LANGUAGES C CXX)
 

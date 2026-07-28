@@ -9,7 +9,7 @@ to JUCE — extended well beyond the original's scope.
 
 ### Highlights
 
-- **Cross-platform**: macOS (universal, 13+) and Windows x64; Standalone, Audio
+- **Cross-platform**: macOS (universal, 12+) and Windows x64; Standalone, Audio
   Unit (`aufx`), and VST3 from one CMake build.
 - **Full editor** — all 226 parameters, bi-directional with the hardware front
   panel, PAGE 2 advanced parameters, filter and DADSR envelope visualizers,
