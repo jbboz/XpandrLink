@@ -17,7 +17,7 @@ to JUCE — extended well beyond the original's scope.
 - **20-slot mod matrix** with click-to-assign routing, destination LEDs, and two
   synchronized views.
 - **SQLite patch librarian** — bank import, content-hash duplicate detection, instant
-  arrow-key audition, favorites, search/sort.
+  arrow-button audition, favorites, search/sort.
 - **Hardware patch safety** — every load/audition/preview lands on scratchpad
   slot 99; memory slots 0–98 are never overwritten by browsing or editing.
 - **Smart randomizer** with musical-safety guardrails and one-level undo.
