@@ -122,14 +122,15 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
     rndMorphPanel_.reset(new RndMorphPanel(*randomizerPanel_, *morphPanel_));
     addChildComponent(rndMorphPanel_.get());   // hidden until RND/MORPH selected
 
-    const bool isStandalone = juce::JUCEApplicationBase::isStandaloneApp();
-
-    if (isStandalone)
-    {
-        ccMapPanel_.reset(new CcMapPanel(midiEngine));
-        addChildComponent(ccMapPanel_.get());
-        ccMapPanel_->onChanged = [this] { saveSettings(); };
-    }
+    // CcMapPanel is created in ALL builds, not just standalone: a CC mapping needs to be
+    // configurable from inside a DAW plugin instance too -- host *automation* of a
+    // parameter is a separate mechanism (AudioProcessorParameter::Listener) that this map
+    // doesn't touch, but real MIDI CC reaching the plugin (a hardware controller in
+    // standalone, or a MIDI FX plugin's output in a DAW's own plugin chain -- see
+    // MidiEngine::pushHostControllerValue) both need this same map to route anywhere.
+    ccMapPanel_.reset(new CcMapPanel(midiEngine));
+    addChildComponent(ccMapPanel_.get());
+    ccMapPanel_->onChanged = [this] { saveSettings(); };
 
     // MidiSettingsPanel (SYNTH ID dropdown) is created in ALL builds so the ID is
     // manually visible/verifiable in standalone too, not just plugin builds.
@@ -148,7 +149,7 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
     styleNavBtn(btnRndMorph);
     styleNavBtn(btnSpace);
     styleNavBtn(btnInit_);
-    if (isStandalone) styleNavBtn(btnCc);
+    styleNavBtn(btnCc);
     styleNavBtn(btnMidi);
     styleNavBtn(btnMute_);
     styleNavBtn(btnTuneAll_);
@@ -164,8 +165,7 @@ EditorTabComponent::EditorTabComponent(MidiEngine& e, ModAssignmentLogic& modLog
     bottomPaneManager_.addPane(&btnSpace, timbreSpacePanel_.get(),
                                [this] { openTimbreSpace(); });
     bottomPaneManager_.addAction(&btnInit_, [this] { initPatchWithConfirm(); });
-    if (isStandalone)
-        bottomPaneManager_.addPane(&btnCc, ccMapPanel_.get());
+    bottomPaneManager_.addPane(&btnCc, ccMapPanel_.get());
     bottomPaneManager_.addAction(&btnTuneAll_, [this] { tuneAllWithConfirm(); });
     bottomPaneManager_.addPane(&btnMidi, midiSettingsPanel_.get(),
         [this] { if (midiSettingsPanel_) midiSettingsPanel_->refresh(); });
@@ -1061,11 +1061,9 @@ void EditorTabComponent::loadSettings()
     auto outName = midiEngine.getCurrentMidiOutputName();
     midiOutputSelector.setText(outName, juce::dontSendNotification);
 
+    midiEngine.loadCcMap(*appProperties);
     if (ccMapPanel_)
-    {
-        midiEngine.loadCcMap(*appProperties);
         ccMapPanel_->refresh();
-    }
 }
 
 
@@ -1085,8 +1083,7 @@ void EditorTabComponent::saveSettings()
     appProperties->setValue("SynthTypeIsMatrix12", midiEngine.isSynthTypeMatrix12());
     appProperties->setValue("SynthInput", midiEngine.getSynthInputName());
     appProperties->setValue("ProgramNumber", programSelector.getSelectedId());
-    if (ccMapPanel_)
-        midiEngine.saveCcMap(*appProperties);
+    midiEngine.saveCcMap(*appProperties);
     appProperties->save();
 }
 

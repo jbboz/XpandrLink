@@ -382,8 +382,16 @@ public:
         // -----------------------------------------------------------------
         // CC automation interception
         // -----------------------------------------------------------------
-        beginTest("A mapped CC (no synth-input source) is scaled and dispatched as a hardware parameter change");
+        beginTest("A mapped CC (no synth-input source) is deferred, not dispatched synchronously on the MIDI thread");
         {
+            // handleIncomingMidiMessage must NEVER touch sendScheduler_ (message-thread-only,
+            // no lock -- see MidiSendQueue.h) directly from the MIDI thread. A mapped CC is
+            // pushed into the same realtime-safe pendingHostCc_ mechanism processBlock uses
+            // (pushHostControllerValue) and only actually applied on the next timerCallback
+            // drain -- found the hard way (2026-09-21): calling sendParameterToSynth
+            // synchronously here raced the message thread's own queue drain and reached real
+            // hardware corrupted, locking up a Matrix-12 (recovered by power-cycling; SysEx
+            // reception had to be manually re-enabled on the unit afterward).
             MidiEngine engine;
             CaptureListener l;
             engine.addListener(&l);
@@ -393,6 +401,10 @@ public:
 
             auto cc = juce::MidiMessage::controllerEvent(1, 10, 64);
             engine.processIncomingMessageForTest(nullptr, cc);
+
+            expectEquals(l.paramCalls, 0, "must not dispatch synchronously from the MIDI thread");
+
+            engine.drainSendQueueForTest();
 
             expectEquals(l.paramCalls, 1);
             expectEquals(l.lastPage, (int)Matrix12::PAGE_VCO1);
@@ -404,7 +416,7 @@ public:
             engine.removeListener(&l);
         }
 
-        beginTest("An unmapped CC (no synth-input source) does nothing");
+        beginTest("An unmapped CC (no synth-input source) does nothing, even after a drain");
         {
             MidiEngine engine;
             CaptureListener l;
@@ -412,6 +424,7 @@ public:
 
             auto cc = juce::MidiMessage::controllerEvent(1, 77, 100); // never mapped
             engine.processIncomingMessageForTest(nullptr, cc);
+            engine.drainSendQueueForTest();
 
             expectEquals(l.paramCalls, 0);
             engine.removeListener(&l);

@@ -31,6 +31,9 @@ MidiEngine::MidiEngine(std::unique_ptr<IMidiBackend> backend)
             lastModSentTime_ = now;
     };
 
+    for (auto& pending : pendingHostCc_)
+        pending.store(-1, std::memory_order_relaxed);
+
     deviceManager.addChangeListener(this);
     startTimer(5);  // drain send queue at ~5 ms resolution
 }
@@ -260,6 +263,21 @@ void MidiEngine::timerCallback()
 {
     auto now = juce::Time::getMillisecondCounter();
 
+    // Drain any CC values pushed from EITHER a real external MIDI input (a controller, or
+    // a DAW's own plugin chain looped back via a virtual port -- handleIncomingMidiMessage,
+    // MIDI thread) OR a DAW host's own plugin-chain MIDI buffer
+    // (AudioProcessor::processBlock, audio thread) -- both defer through the same
+    // pushHostControllerValue seam so applyCcMapping (which can send to hardware) only
+    // ever runs here, on the message thread. Only the latest push per CC number since the
+    // last drain survives for the UI-update side; the hardware-send side has its own
+    // separate throttle inside applyCcMapping (see pendingCcSend_ below).
+    for (size_t cc = 0; cc < pendingHostCc_.size(); ++cc)
+    {
+        int val = pendingHostCc_[cc].exchange(-1, std::memory_order_relaxed);
+        if (val >= 0)
+            applyCcMapping((int)cc, val);
+    }
+
     // Flush a coalesced mod-matrix amount drag once its throttle window has passed --
     // sends only the latest value a fast drag settled on, never an intermediate tick.
     if (pendingModAmount_.valid && !shouldCoalesceModAmount(now, lastModAmountSendTime_, Oberheim::kModCmdGapMs))
@@ -267,6 +285,22 @@ void MidiEngine::timerCallback()
         auto pending = pendingModAmount_;
         pendingModAmount_.valid = false;
         sendModAmountNow(pending.destIndex, pending.idSource, pending.amount);
+    }
+
+    // Same flush shape for CC-driven parameter sends throttled inside applyCcMapping --
+    // a continuously-running CC source (e.g. a DAW MIDI FX LFO) settles on a final value
+    // once it stops changing within the throttle window; that's what actually reaches
+    // hardware, not every intermediate tick.
+    for (size_t cc = 0; cc < pendingCcSend_.size(); ++cc)
+    {
+        auto& pending = pendingCcSend_[cc];
+        if (pending.valid && !shouldCoalesceModAmount(now, lastCcSendTime_[cc], Oberheim::kModCmdGapMs))
+        {
+            auto toSend = pending;
+            pending.valid = false;
+            lastCcSendTime_[cc] = now;
+            sendParameterToSynth(toSend.page, toSend.paramCol, toSend.value, false);
+        }
     }
 
     // Drain the send queue; the byte-inspection side-effects (lastSentPage/Mode,
@@ -671,6 +705,56 @@ int MidiEngine::getCcMap(int cc) const
     return ccMap_[(size_t)cc].paramId;
 }
 
+bool MidiEngine::applyCcMapping(int cc, int ccVal)
+{
+    if (cc < 0 || cc >= 128) return false;
+    CcMappedParam slot;
+    { const juce::ScopedLock sl(listenerLock); slot = ccMap_[(size_t)cc]; }
+    if (slot.paramId < 0 || slot.page < 0) return false;
+
+    int range  = slot.max - slot.min;
+    int scaled = (range == 1)
+               ? (ccVal > 63 ? 1 : 0)
+               : slot.min + (int)std::round(ccVal * (double)range / 127.0);
+    scaled = juce::jlimit(slot.min, slot.max, scaled);
+
+    // UI display stays fully live -- no hardware risk, so this updates on every call
+    // regardless of the send throttle below.
+    broadcastParameterChange(slot.page, slot.paramCol, scaled, false, false);
+
+    // Actually send the new value to the synth -- found missing via real-world Logic
+    // testing (2026-09-21): broadcastParameterChange alone only updates the on-screen
+    // widget, under setHardwareUpdateMode(true) (EditorTabComponent::onParameterChangedFromHardware).
+    // That guard exists to stop a genuinely hardware-echoed value from being re-sent as
+    // an infinite loop -- but a CC from a controller/DAW is not an echo, it's a new
+    // value that needs to reach the synth, same as a UI knob drag.
+    //
+    // Throttled the same way as changeModulationAmount's rapid-drag coalescing: a
+    // continuously-running CC source (a DAW's own MIDI FX LFO) can generate far more
+    // values/sec than 1980s Oberheim firmware can absorb -- confirmed by a real Matrix-12
+    // lockup during testing (2026-09-21), recovered only by power-cycling the unit.
+    // applyCcMapping now only ever runs from timerCallback (message thread) regardless of
+    // whether the CC arrived via external MIDI input or a DAW host's own plugin buffer --
+    // see the call sites, both of which defer through pushHostControllerValue.
+    auto now = juce::Time::getMillisecondCounter();
+    if (shouldCoalesceModAmount(now, lastCcSendTime_[(size_t)cc], Oberheim::kModCmdGapMs))
+    {
+        pendingCcSend_[(size_t)cc] = { true, slot.page, slot.paramCol, scaled };
+    }
+    else
+    {
+        lastCcSendTime_[(size_t)cc] = now;
+        sendParameterToSynth(slot.page, slot.paramCol, scaled, false);
+    }
+    return true;
+}
+
+void MidiEngine::pushHostControllerValue(int cc, int value)
+{
+    if (cc < 0 || cc >= 128) return;
+    pendingHostCc_[(size_t)cc].store(juce::jlimit(0, 127, value), std::memory_order_relaxed);
+}
+
 void MidiEngine::saveCcMap(juce::PropertiesFile& props) const
 {
     juce::String val;
@@ -1065,27 +1149,23 @@ void MidiEngine::handleIncomingMidiMessage(juce::MidiInput* source, const juce::
     }
 
     // CC automation: intercept mapped CC from controller/DAW inputs before MIDI thru.
-    // Does NOT send to synth — same path as hardware knob feedback.
+    // Deferred to the message thread via pushHostControllerValue -- this runs on the MIDI
+    // thread, and applyCcMapping's actual synth send touches sendScheduler_, which is
+    // message-thread-only with no lock (MidiSendQueue.h). Calling it synchronously here
+    // raced the message thread's own queue drain (found 2026-09-21: reached a real
+    // Matrix-12 corrupted and locked it up, recovered only by power-cycling the unit).
+    // Only a thread-safe lookup (getCcMap, lock-guarded) plus an atomic push happen here;
+    // applyCcMapping itself only ever runs from timerCallback now, same as the host-
+    // plugin-buffer path already did.
     if (message.isController())
     {
         bool fromSynth = (source != nullptr && source->getName() == synthIn
                           && synthIn.isNotEmpty());
-        if (!fromSynth)
+        int cc = message.getControllerNumber();
+        if (!fromSynth && getCcMap(cc) >= 0)
         {
-            int cc    = message.getControllerNumber();
-            int ccVal = message.getControllerValue();
-            CcMappedParam slot;
-            { const juce::ScopedLock sl(listenerLock); slot = ccMap_[(size_t)cc]; }
-            if (slot.paramId >= 0 && slot.page >= 0)
-            {
-                int range  = slot.max - slot.min;
-                int scaled = (range == 1)
-                           ? (ccVal > 63 ? 1 : 0)
-                           : slot.min + (int)std::round(ccVal * (double)range / 127.0);
-                scaled = juce::jlimit(slot.min, slot.max, scaled);
-                broadcastParameterChange(slot.page, slot.paramCol, scaled, false, false);
-                return;
-            }
+            pushHostControllerValue(cc, message.getControllerValue());
+            return;
         }
     }
 
