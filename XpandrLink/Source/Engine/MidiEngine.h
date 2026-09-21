@@ -289,6 +289,23 @@ public:
     // Pass paramId=-1 to unmap.
     void setCcMap(int cc, int paramId);
     int  getCcMap(int cc) const;                        // returns paramId or -1 if unmapped
+
+    // Realtime-safe entry point for CC arriving in a DAW host's own plugin-chain MIDI
+    // buffer (e.g. a MIDI FX/modulator plugin routed into XpandrLink ahead of it in the
+    // channel strip) -- distinct from CC arriving on an external MIDI input port, which
+    // goes through handleIncomingMidiMessage on the MIDI thread. Call this from
+    // AudioProcessor::processBlock (the realtime audio thread): it is a plain atomic
+    // store, never a lock or syscall. The value is applied through the same CC-map
+    // (applyCcMapping) on the next timerCallback drain (~5ms), same as the external-
+    // input path, and coalesces naturally -- only the latest push per CC number before
+    // a drain survives. Out-of-range cc (not 0-127) is silently ignored.
+    void pushHostControllerValue(int cc, int value);
+
+    // Diagnostic-only: counts every pushHostControllerValue call, regardless of whether
+    // the CC is mapped. Lets the UI show a live "is the host even sending us MIDI at all"
+    // signal (CcMapPanel), independent of ccMap_ contents -- useful for telling a DAW-
+    // routing problem (nothing reaches processBlock) apart from a mapping problem.
+    int getHostCcRxCount() const { return hostCcRxCount_.load(std::memory_order_relaxed); }
     void saveCcMap(juce::PropertiesFile& props) const;
     void loadCcMap(juce::PropertiesFile& props);
 
@@ -317,6 +334,12 @@ private:
     void syncMidiOutputFromDeviceManager();
     juce::AudioDeviceManager& activeManager();
     void sendSysex(const std::vector<unsigned char>& data);
+
+    // Shared CC-map lookup+scale+broadcast, used by both the external-MIDI-input path
+    // (handleIncomingMidiMessage, MIDI thread) and the host-plugin-buffer path
+    // (pushHostControllerValue's timerCallback drain, message thread). Returns false
+    // (no-op) if cc is unmapped or out of range.
+    bool applyCcMapping(int cc, int ccVal);
 
     // Send-queue helpers — all called on the message thread only. These are thin forwarders
     // to sendScheduler_ so the ~12 internal call sites keep their existing signatures; the
@@ -368,6 +391,16 @@ private:
     juce::uint32 lastModAmountSendTime_ { 0 };
     void sendModAmountNow(int destIndex, int idSource, int newAmount);
 
+    // Same coalescing shape as PendingModAmount, for CC-driven parameter sends
+    // (applyCcMapping). A continuously-running CC source (a DAW's own MIDI FX LFO) can
+    // generate far more values per second than sendParameterToSynth was ever exercised
+    // at before -- an ordinary UI knob drag is bounded by real mouse-move rate, an LFO
+    // is not. Found 2026-09-21 via a real hardware lockup. Message-thread only, same as
+    // pendingModAmount_ -- applyCcMapping itself now only ever runs from timerCallback.
+    struct PendingCcSend { bool valid = false; int page = -1; int paramCol = -1; int value = 0; };
+    std::array<PendingCcSend, 128> pendingCcSend_;
+    std::array<juce::uint32, 128>  lastCcSendTime_ {};
+
     // CC automation map — accessed from both message thread (write) and MIDI thread (read).
     // Protected by listenerLock. paramId=-1 means unmapped.
     struct CcMappedParam {
@@ -378,6 +411,15 @@ private:
         int max      = 127;
     };
     std::array<CcMappedParam, 128> ccMap_;
+
+    // Realtime-safe landing spot for pushHostControllerValue (audio thread) -- plain
+    // atomic store, no lock. -1 means no pending value for that CC number. Drained by
+    // timerCallback (message thread) into applyCcMapping; only the latest push per CC
+    // number before a drain survives, the same coalescing shape as pendingModAmount_
+    // but without needing a throttle window -- nothing is sent to hardware here, so
+    // there's no flood risk, just the natural ~5ms drain cadence.
+    std::array<std::atomic<int>, 128> pendingHostCc_;
+    std::atomic<int> hostCcRxCount_ { 0 };  // diagnostic-only, see getHostCcRxCount()
 
     mutable juce::CriticalSection listenerLock;
     std::vector<Listener*> listeners;

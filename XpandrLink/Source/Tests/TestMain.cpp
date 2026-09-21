@@ -3,6 +3,7 @@
 #include "BUG05_ProgramChangeSysexTest.h"
 #include "ChangeModulationSourceTest.h"
 #include "FullModMatrixSlotTest.h"
+#include "HostMidiCcTest.h"
 #include "IDSourceTrackingTest.h"
 #include "InitPatchLoadTest.h"
 #include "MidiEngineCharacterizationTest.h"
