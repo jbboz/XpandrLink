@@ -751,7 +751,6 @@ bool MidiEngine::applyCcMapping(int cc, int ccVal)
 
 void MidiEngine::pushHostControllerValue(int cc, int value)
 {
-    hostCcRxCount_.fetch_add(1, std::memory_order_relaxed);
     if (cc < 0 || cc >= 128) return;
     pendingHostCc_[(size_t)cc].store(juce::jlimit(0, 127, value), std::memory_order_relaxed);
 }

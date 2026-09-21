@@ -14,22 +14,13 @@
 // CC automation table: maps MIDI CC numbers (0-127) to Xpander parameters.
 // Incoming CC from non-synth inputs is scaled to the param range and broadcast
 // as a hardware parameter event — does not echo back to the synth.
-class CcMapPanel : public juce::Component, private juce::ListBoxModel, private juce::Timer
+class CcMapPanel : public juce::Component, private juce::ListBoxModel
 {
 public:
     std::function<void()> onChanged;   // fired after any mapping change — call saveSettings()
 
     CcMapPanel(MidiEngine& engine) : midiEngine_(engine)
     {
-        // Diagnostic-only: shows whether ANY CC has reached the plugin from any source
-        // (external MIDI input in standalone, or a DAW host's own plugin-chain MIDI
-        // buffer -- see MidiEngine::pushHostControllerValue) independent of ccMap_
-        // contents. Tells a DAW-routing problem apart from a mapping problem.
-        hostRxLabel_.setJustificationType(juce::Justification::centredRight);
-        hostRxLabel_.setColour(juce::Label::textColourId, ThemeData::getHardwareTheme().textLabel);
-        hostRxLabel_.setFont(ThemeData::getVfdFont(11.0f));
-        addAndMakeVisible(hostRxLabel_);
-        startTimer(300);
         // Build the shared item list once: a plain "unmapped" row + every param, prefixed
         // with its group (e.g. "VCF Res", "ENV 1 Amp", "LFO 2 Speed"). Many param names
         // are single generic words ("Res", "Amp", "Freq", "Speed") reused across several
@@ -70,7 +61,6 @@ public:
         auto r = getLocalBounds().reduced(8, 6);
         auto topBar = r.removeFromTop(24);
         clearAllBtn_.setBounds(topBar.removeFromRight(80));
-        hostRxLabel_.setBounds(topBar.removeFromRight(190));
         headerLabel_.setBounds(topBar);
         r.removeFromTop(4);
         listBox_.setBounds(r);
@@ -80,17 +70,6 @@ public:
     void refresh() { listBox_.updateContent(); }
 
 private:
-    void timerCallback() override
-    {
-        // Diagnostic-only: hardwareUpdateMode is the guard that suppresses ALL outgoing
-        // sendParameterToSynth calls (it exists to stop a genuine hardware echo from
-        // looping back) -- if it's ever stuck true, no panel control of any kind would
-        // reach the synth, which looks identical to a broken send path from the outside.
-        hostRxLabel_.setText("Host RX: " + juce::String(midiEngine_.getHostCcRxCount())
-                              + "  HWUpd: " + juce::String(midiEngine_.isInHardwareUpdateMode() ? 1 : 0),
-                              juce::dontSendNotification);
-    }
-
     // ---- ListBoxModel -------------------------------------------------------
     int getNumRows() override { return 128; }
 
@@ -173,6 +152,5 @@ private:
     juce::StringArray paramItems_;
     juce::TextButton  clearAllBtn_;
     juce::Label       headerLabel_;
-    juce::Label       hostRxLabel_;
     juce::ListBox     listBox_;
 };

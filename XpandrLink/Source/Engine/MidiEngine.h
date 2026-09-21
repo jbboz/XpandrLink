@@ -301,11 +301,6 @@ public:
     // a drain survives. Out-of-range cc (not 0-127) is silently ignored.
     void pushHostControllerValue(int cc, int value);
 
-    // Diagnostic-only: counts every pushHostControllerValue call, regardless of whether
-    // the CC is mapped. Lets the UI show a live "is the host even sending us MIDI at all"
-    // signal (CcMapPanel), independent of ccMap_ contents -- useful for telling a DAW-
-    // routing problem (nothing reaches processBlock) apart from a mapping problem.
-    int getHostCcRxCount() const { return hostCcRxCount_.load(std::memory_order_relaxed); }
     void saveCcMap(juce::PropertiesFile& props) const;
     void loadCcMap(juce::PropertiesFile& props);
 
@@ -415,11 +410,9 @@ private:
     // Realtime-safe landing spot for pushHostControllerValue (audio thread) -- plain
     // atomic store, no lock. -1 means no pending value for that CC number. Drained by
     // timerCallback (message thread) into applyCcMapping; only the latest push per CC
-    // number before a drain survives, the same coalescing shape as pendingModAmount_
-    // but without needing a throttle window -- nothing is sent to hardware here, so
-    // there's no flood risk, just the natural ~5ms drain cadence.
+    // number before a drain survives at the UI-update cadence (~5ms); the separate
+    // hardware-send throttle lives in pendingCcSend_/lastCcSendTime_ below.
     std::array<std::atomic<int>, 128> pendingHostCc_;
-    std::atomic<int> hostCcRxCount_ { 0 };  // diagnostic-only, see getHostCcRxCount()
 
     mutable juce::CriticalSection listenerLock;
     std::vector<Listener*> listeners;
