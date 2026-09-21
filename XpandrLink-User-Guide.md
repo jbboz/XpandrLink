@@ -368,14 +368,14 @@ always a musically valid patch rather than a corrupted mix.
 
 Button: **CC**
 
-Map any MIDI CC number (0–127) to any Xpander parameter. Incoming CC from non-synth inputs (e.g. a DAW automation lane or MIDI controller) is scaled to the parameter's native range and applied to the editor in real time — without echoing to the synth output.
+Map any MIDI CC number (0–127) to any Xpander parameter. A mapped CC updates the editor in real time and is sent on to the synth — the same as turning that parameter's knob by hand. This pane is available in Standalone, AU, and VST3.
 
 #### Using the CC Table
 
 1. Open the CC pane.
 2. Find the CC number you want to map (e.g. CC 74 for a filter cutoff knob on your controller).
 3. Use the dropdown in that row to select the Xpander parameter.
-4. The mapping is saved automatically and persists across sessions.
+4. The mapping is saved automatically and persists across sessions — including for an AU/VST3 instance, which shares the same settings file as the Standalone app, so a mapping made in one applies in the other.
 5. Click **Clear All** to remove all mappings.
 
 
@@ -384,9 +384,28 @@ Map any MIDI CC number (0–127) to any Xpander parameter. Incoming CC from non-
 
 Values are linearly scaled: CC 0 → parameter minimum, CC 127 → parameter maximum. For binary (on/off) parameters, CC > 63 = on, CC ≤ 63 = off.
 
-#### Which MIDI Input Sends CC?
+#### Where CC Can Come From
 
-CC automation applies to any active MIDI input that is **not** designated as the synth input. Connect your DAW or MIDI controller to a separate port from the Matrix-12 / Xpander hardware.
+Two independent sources feed the CC table:
+
+- **A hardware MIDI controller, or anything else on an external MIDI input** — enable it as an input in the MIDI pane. CC automation applies to any active input that is **not** designated as the synth input.
+- **A DAW host's own plugin-chain MIDI** (AU/VST3 only) — CC arriving in the host's own signal chain, for example from a MIDI FX plugin placed ahead of XpandrLink, is picked up automatically with no input selection needed. Only CC is picked up this way; notes and everything else in that buffer are left alone, so this path never forwards anything to the synth as MIDI thru. Host *parameter automation* (dragging an automation lane in the DAW) is a separate mechanism entirely — it drives the mapped host parameter directly and never touches this table.
+
+#### Using a DAW's MIDI FX Plugin for CC (e.g. Logic Pro's Modulator)
+
+Some hosts route a channel's MIDI FX plugin chain only into that channel's **Instrument** slot, not into a downstream Audio effect insert — and XpandrLink is an Audio effect (`aufx`), not an instrument. Logic Pro works this way: a MIDI FX plugin like Modulator, inserted on the same channel as XpandrLink, does not reach XpandrLink directly.
+
+The fix is a short MIDI bridge, using tools Logic already provides:
+
+1. On the channel, insert an **Instrument** — the stock **External Instrument** plugin is enough; you don't need it to make any sound, so set its **Audio Input** to *None*.
+2. Set that Instrument's **MIDI Destination** to a virtual port — Logic's own **Logic Pro Virtual Out**, or an IAC Driver port from Audio MIDI Setup.
+3. In XpandrLink's **MIDI** pane, enable that same virtual port under **MIDI Input**.
+4. Insert your MIDI FX plugin (e.g. Modulator) on the same channel, ahead of the Instrument — its output now reaches the Instrument, out to the virtual port, and back into XpandrLink's input.
+5. Map the CC number your MIDI FX plugin is sending, in XpandrLink's CC pane, as above.
+
+This isn't a workaround specific to XpandrLink — it's the same bridge Logic itself provides for controlling any external MIDI gear from a MIDI FX chain.
+
+> **A continuously-running MIDI FX plugin (e.g. an LFO) is safe to leave running.** CC-driven sends to the synth are automatically throttled, the same protection already in place for mod-matrix editing, so a fast-changing CC source can't flood the synth's MIDI input.
 
 ---
 
@@ -501,7 +520,11 @@ The plugin saves and restores the active patch with the project — when you reo
 
 ### Ableton Live
 
-XpandrLink uses the `aufx` (audio effect) plugin type in AU hosts. Load it as an audio effect on a MIDI-routed audio track. Use a separate MIDI input track (not routed through the plugin) for the CC automation feature.
+XpandrLink uses the `aufx` (audio effect) plugin type in AU hosts — this is what makes it show up in Ableton's Audio Effects browser (Ableton doesn't support the `aumi` MIDI-effect type). Load it as an audio effect on a MIDI-routed audio track for bidirectional hardware communication.
+
+### CC Automation in a DAW
+
+See [4.6 CC — MIDI CC Automation](#46-cc--midi-cc-automation) — it covers both a hardware controller on a separate MIDI input and a MIDI FX plugin in the DAW's own plugin chain, including a routing note specific to Logic Pro (whose MIDI FX chain doesn't reach a downstream Audio effect plugin directly).
 
 ---
 
