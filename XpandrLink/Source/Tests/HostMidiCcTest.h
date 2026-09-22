@@ -198,7 +198,7 @@ public:
             engine.setCcMap(40, 40); // id=40: page=PAGE_VCF, paramCol=VCF_FREQ
 
             // 40 drain ticks, a new (different) CC value pushed before each one -- simulates
-            // an LFO changing faster than the throttle window (kModCmdGapMs = 50ms) alongside
+            // an LFO changing faster than the throttle window (kCcSendThrottleMs) alongside
             // this test's own real-time drain cadence.
             for (int i = 0; i < 40; ++i)
             {
@@ -229,6 +229,58 @@ public:
             expect(paramChangeCount < 30,
                    "40 distinct pushes over ~200ms must not produce anywhere near 40 sends -- got "
                    + juce::String(paramChangeCount));
+        }
+
+        // Found via real-world Logic testing (2026-09-22): two MIDI FX plugins mapped to
+        // parameters on DIFFERENT pages (CC3 -> VCF Freq, CC4 -> VCO1 Freq), both continuously
+        // running, caused rapid alternating page-switching on the hardware -- a real risk of
+        // repeating the earlier lockup, since each switch needs its own page-select + settle
+        // and an independent per-CC throttle doesn't bound their COMBINED rate. The throttle
+        // gate is now shared across all CCs (see lastCcSendTime_ in MidiEngine.h) so the
+        // aggregate send rate stays bounded regardless of how many CCs are concurrently
+        // active; pendingCcSend_ stays per-CC so neither one is starved by the other.
+        beginTest("Two CCs mapped to DIFFERENT pages, both continuously active, share one throttle "
+                  "(bounded aggregate rate) without starving either one");
+        {
+            auto mockPtr = std::make_unique<MockMidiBackend>();
+            auto& mock = *mockPtr;
+            MidiEngine engine{ std::move(mockPtr) };
+            engine.setMidiOutput("Fake Synth");
+            engine.setCcMap(3, 40); // id=40: page=PAGE_VCF,  paramCol=VCF_FREQ
+            engine.setCcMap(4, 0);  // id=0:  page=PAGE_VCO1, paramCol=VCO_FREQ
+
+            for (int i = 0; i < 30; ++i)
+            {
+                engine.pushHostControllerValue(3, (i * 5) % 128);
+                engine.pushHostControllerValue(4, (i * 11) % 128);
+                engine.drainSendQueueForTest();
+                juce::Thread::sleep(5);
+            }
+            for (int elapsed = 0; elapsed < 400; elapsed += 10)
+            {
+                engine.drainSendQueueForTest();
+                juce::Thread::sleep(10);
+            }
+            engine.drainSendQueueForTest();
+
+            int vcfSends = 0, vco1Sends = 0, totalParamChanges = 0;
+            for (auto& m : mock.sentMessages)
+            {
+                if (!m.isSysEx() || m.getSysExDataSize() < 10 || m.getSysExData()[2] != 0x0A) continue;
+                ++totalParamChanges;
+                auto paramCol = m.getSysExData()[4];
+                if (paramCol == (uint8_t)Matrix12::VCF_FREQ) ++vcfSends;
+                if (paramCol == (uint8_t)Matrix12::VCO_FREQ) ++vco1Sends;
+            }
+
+            expect(vcfSends > 0,  "the VCF-mapped CC must not be starved by the VCO1-mapped one");
+            expect(vco1Sends > 0, "the VCO1-mapped CC must not be starved by the VCF-mapped one");
+            // ~150ms shared throttle over ~550ms total real time -- roughly 4-5 sends possible
+            // if perfectly paced; generous upper bound for scheduling variance, but still far
+            // below what two INDEPENDENTLY-throttled 50ms streams would have produced (~20+).
+            expect(totalParamChanges < 15,
+                   "two concurrently-active different-page CCs must not roughly double the "
+                   "single-CC send rate -- got " + juce::String(totalParamChanges) + " total sends");
         }
     }
 };

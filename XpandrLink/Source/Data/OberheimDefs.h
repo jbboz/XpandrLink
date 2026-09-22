@@ -15,6 +15,14 @@ namespace Oberheim
     constexpr int kButtonPageSettleMs = 150;  // page-select → button-subpage parameter
     constexpr int kSliderPageSettleMs = 100;  // page-select → slider/knob parameter
     constexpr int kModCmdGapMs        =  50;  // between mod-matrix sub-commands
+    constexpr int kCcSendThrottleMs   = 150;  // shared floor between any two CC-driven
+                                               // parameter sends -- must be >= the largest
+                                               // page-select settle above (kButtonPageSettleMs),
+                                               // since two CCs mapped to different pages each
+                                               // require a full page-select + settle on every
+                                               // alternation between them (kModCmdGapMs is too
+                                               // short: it paces sub-commands within a single
+                                               // mod-matrix edit, which need no page-select at all)
     constexpr int kPatchSendSettleMs  = 100;  // patch-dump SysEx → program-change
     constexpr int kDisplaySettleMs    = 100;  // display OFF -> ON -> text message
     constexpr int kDisplayScrollMs    =  50;  // typewriter: delay between growing substrings

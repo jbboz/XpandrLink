@@ -386,15 +386,27 @@ private:
     juce::uint32 lastModAmountSendTime_ { 0 };
     void sendModAmountNow(int destIndex, int idSource, int newAmount);
 
-    // Same coalescing shape as PendingModAmount, for CC-driven parameter sends
-    // (applyCcMapping). A continuously-running CC source (a DAW's own MIDI FX LFO) can
-    // generate far more values per second than sendParameterToSynth was ever exercised
-    // at before -- an ordinary UI knob drag is bounded by real mouse-move rate, an LFO
-    // is not. Found 2026-09-21 via a real hardware lockup. Message-thread only, same as
-    // pendingModAmount_ -- applyCcMapping itself now only ever runs from timerCallback.
+    // Coalescing for CC-driven parameter sends (applyCcMapping). A continuously-running CC
+    // source (a DAW's own MIDI FX LFO) can generate far more values per second than
+    // sendParameterToSynth was ever exercised at before -- an ordinary UI knob drag is
+    // bounded by real mouse-move rate, an LFO is not. Found 2026-09-21 via a real hardware
+    // lockup. Message-thread only, same as pendingModAmount_ -- applyCcMapping itself only
+    // ever runs from timerCallback.
+    //
+    // The throttle is a single SHARED gate (lastCcSendTime_), not one per CC number: two
+    // CCs mapped to different pages, both continuously active, each need a page-select +
+    // settle (kSliderPageSettleMs) on every alternation between them. An independent
+    // per-CC throttle only bounds each stream's own rate -- their COMBINED rate could
+    // still exceed what settle-paced draining can keep up with, growing the queue and
+    // modulation latency without bound. Found 2026-09-22 via real hardware testing (two
+    // MIDI FX plugins mapped to different-page parameters caused rapid, unbounded page
+    // switching). pendingCcSend_ stays per-CC (128 slots) so no single CC's update is ever
+    // starved by another; ccFlushCursor_ round-robins across whichever are pending so each
+    // gets a fair turn, one shared-gated send at a time.
     struct PendingCcSend { bool valid = false; int page = -1; int paramCol = -1; int value = 0; };
     std::array<PendingCcSend, 128> pendingCcSend_;
-    std::array<juce::uint32, 128>  lastCcSendTime_ {};
+    juce::uint32 lastCcSendTime_ { 0 };
+    int          ccFlushCursor_  { 0 };
 
     // CC automation map — accessed from both message thread (write) and MIDI thread (read).
     // Protected by listenerLock. paramId=-1 means unmapped.
