@@ -19,6 +19,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "../Engine/MidiEngine.h"
+#include "../Engine/SynthDefs.h"
 #include "MockMidiBackend.h"
 
 class MidiEngineSendPathTest : public juce::UnitTest
@@ -198,6 +199,69 @@ public:
             expectEquals(setAmtCount, 2,
                 "exactly one immediate send plus one coalesced flush -- never one send per burst call");
             expectEquals(lastAmt, 40, "the flushed value must be the LAST one from the burst, not an intermediate");
+        }
+
+        // Found via real-world Logic testing (2026-09-22): a CC continuously mapped to VCF Freq
+        // kept modulating VCF Freq correctly -- until the user manually switched the Xpander's
+        // own front panel to a different page (e.g. VCO1), at which point the SAME CC started
+        // silently modulating whatever parameter shares VCF_FREQ's paramCol on that OTHER page
+        // (e.g. VCO1 Freq) instead. Root cause: MidiSendQueue::enqueuePageSelectIfNeeded dedupes
+        // against lastQueuedPage_, which only reflects what WE last sent -- it has no idea the
+        // hardware's actual displayed page diverged because of manual front-panel navigation.
+        // MidiEngine::currentRxPage DOES know this (set in handlePageSelect whenever the synth
+        // itself sends a page-select, which it does when a human presses a front-panel page
+        // button) -- it just was never consulted here.
+        beginTest("A page-select is re-sent even if it matches our last send, when the hardware's "
+                  "own reported page has since diverged (e.g. manual front-panel navigation)");
+        {
+            auto mockPtr = std::make_unique<MockMidiBackend>();
+            auto& mock = *mockPtr;
+            MidiEngine engine{ std::move(mockPtr) };
+            engine.setMidiOutput("Fake Synth");
+
+            auto isPageSelectFor = [](const juce::MidiMessage& m, int page) {
+                if (!m.isSysEx() || m.getSysExDataSize() < 5) return false;
+                auto* d = m.getSysExData();
+                return d[2] == 0x0B && d[3] == (uint8_t)page;
+            };
+
+            // First send to VCF Freq -- establishes lastQueuedPage_ = PAGE_VCF.
+            engine.sendParameterToSynth((int)Matrix12::PAGE_VCF, (int)Matrix12::VCF_FREQ, 50, false);
+            pumpSendQueue(engine);
+
+            // The user presses a front-panel page button on the Xpander, navigating it to
+            // VCO1 -- the synth broadcasts its own page-select, which we receive.
+            std::vector<uint8_t> hwPageSelect = { 0x10, 2, 0x0B, (uint8_t)Matrix12::PAGE_VCO1, 0x00 };
+            auto hwMsg = juce::MidiMessage::createSysExMessage(hwPageSelect.data(), (int)hwPageSelect.size());
+            engine.processIncomingMessageForTest(nullptr, hwMsg);
+
+            // A second send targets VCF Freq again -- same page as before from OUR tracking's
+            // point of view, but the hardware is no longer there.
+            engine.sendParameterToSynth((int)Matrix12::PAGE_VCF, (int)Matrix12::VCF_FREQ, 90, false);
+            pumpSendQueue(engine);
+
+            int vcfPageSelects = 0;
+            for (auto& m : mock.sentMessages)
+                if (isPageSelectFor(m, (int)Matrix12::PAGE_VCF)) ++vcfPageSelects;
+
+            expectEquals(vcfPageSelects, 2,
+                "the second VCF page-select must not be deduped away just because it matches "
+                "what we last sent -- the hardware moved since then");
+
+            // A third send to VCF Freq, with no further hardware-side page change in between,
+            // must go back to being deduped -- the corrective page-select above should have
+            // refreshed currentRxPage too, or every future send would force a redundant
+            // page-select forever, not just once after a genuine divergence.
+            engine.sendParameterToSynth((int)Matrix12::PAGE_VCF, (int)Matrix12::VCF_FREQ, 100, false);
+            pumpSendQueue(engine);
+
+            vcfPageSelects = 0;
+            for (auto& m : mock.sentMessages)
+                if (isPageSelectFor(m, (int)Matrix12::PAGE_VCF)) ++vcfPageSelects;
+
+            expectEquals(vcfPageSelects, 2,
+                "a third same-page send with no further hardware-side change must be deduped "
+                "normally -- the divergence check must not stay permanently tripped");
         }
     }
 };
