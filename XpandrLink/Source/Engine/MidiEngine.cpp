@@ -24,6 +24,15 @@ MidiEngine::MidiEngine(std::unique_ptr<IMidiBackend> backend)
         {
             lastSentPage = bytes[4];
             lastSentMode = bytes[5];
+            // Also refresh currentRxPage/SubPage (normally receive-only, updated in
+            // handlePageSelect when the synth itself reports a page change) -- a page-select
+            // we just successfully sent moves the hardware there too, and enqueuePageSelectIfNeeded
+            // compares against currentRxPage to detect external divergence. Without this, once
+            // that divergence check ever fires once, it would keep firing forever afterward
+            // (currentRxPage would stay frozen at the last hardware-reported page and never
+            // reflect that our own correcting page-select actually landed).
+            currentRxPage    = bytes[4];
+            currentRxSubPage = bytes[5];
         }
         // Mod routing format: F0 10 id 0F ... (cmd at [3]).
         // Record send time so handleModRouting can suppress the hardware echo.
@@ -290,16 +299,26 @@ void MidiEngine::timerCallback()
     // Same flush shape for CC-driven parameter sends throttled inside applyCcMapping --
     // a continuously-running CC source (e.g. a DAW MIDI FX LFO) settles on a final value
     // once it stops changing within the throttle window; that's what actually reaches
-    // hardware, not every intermediate tick.
-    for (size_t cc = 0; cc < pendingCcSend_.size(); ++cc)
+    // hardware, not every intermediate tick. The gate is shared across every mapped CC
+    // (see lastCcSendTime_'s declaration), so at most ONE pending CC is flushed per tick
+    // here, not one per CC -- ccFlushCursor_ round-robins across whichever are pending so
+    // two or more concurrently-active CCs each still get their turn, just staggered,
+    // instead of one starving the rest or all of them flushing at once.
+    if (!shouldCoalesceModAmount(now, lastCcSendTime_, Oberheim::kCcSendThrottleMs))
     {
-        auto& pending = pendingCcSend_[cc];
-        if (pending.valid && !shouldCoalesceModAmount(now, lastCcSendTime_[cc], Oberheim::kModCmdGapMs))
+        for (int i = 0; i < (int)pendingCcSend_.size(); ++i)
         {
-            auto toSend = pending;
-            pending.valid = false;
-            lastCcSendTime_[cc] = now;
-            sendParameterToSynth(toSend.page, toSend.paramCol, toSend.value, false);
+            int cc = (ccFlushCursor_ + i) % (int)pendingCcSend_.size();
+            auto& pending = pendingCcSend_[(size_t)cc];
+            if (pending.valid)
+            {
+                auto toSend = pending;
+                pending.valid = false;
+                lastCcSendTime_ = now;
+                ccFlushCursor_  = (cc + 1) % (int)pendingCcSend_.size();
+                sendParameterToSynth(toSend.page, toSend.paramCol, toSend.value, false);
+                break;
+            }
         }
     }
 
@@ -321,6 +340,20 @@ void MidiEngine::enqueueAction(std::function<void()> action, int delayAfterMs)
 
 void MidiEngine::enqueuePageSelectIfNeeded(int page, int mode, int settleMs, bool force)
 {
+    // If the hardware itself has told us (via a genuinely received page-select -- e.g. the
+    // user pressed a front-panel page button) that its live page differs from the one we're
+    // about to target, our own dedup state (lastQueuedPage_, purely OUR outgoing history) is
+    // stale: force the page-select even if it matches what we last sent, or the next bare
+    // parameter byte lands on whatever page the hardware is actually showing instead. Found
+    // 2026-09-22: a CC continuously mapped to VCF Freq kept correctly modulating VCF Freq
+    // until the user manually switched the Xpander's front panel to a different page, at
+    // which point the same CC silently started modulating whatever parameter shares
+    // VCF_FREQ's paramCol on that other page instead.
+    if (!force)
+    {
+        int rxPage = currentRxPage.load();
+        if (rxPage >= 0 && rxPage != page) force = true;
+    }
     // sysexID lives on MidiEngine (cross-thread atomic); supply it to the protocol-agnostic queue.
     sendScheduler_.enqueuePageSelectIfNeeded(page, mode, settleMs, (uint8_t)(sysexID), force);
 }
@@ -736,14 +769,21 @@ bool MidiEngine::applyCcMapping(int cc, int ccVal)
     // applyCcMapping now only ever runs from timerCallback (message thread) regardless of
     // whether the CC arrived via external MIDI input or a DAW host's own plugin buffer --
     // see the call sites, both of which defer through pushHostControllerValue.
+    //
+    // The throttle gate (lastCcSendTime_) is shared across every mapped CC, not per-CC --
+    // see its declaration in MidiEngine.h for why (two CCs on different pages need a
+    // page-select + settle on every alternation between them; an independent per-CC
+    // throttle doesn't bound their combined rate). pendingCcSend_ itself stays per-CC so
+    // this one's update is never silently dropped by another CC's -- it just waits its
+    // turn for the next timerCallback flush (see the pendingCcSend_ loop there).
     auto now = juce::Time::getMillisecondCounter();
-    if (shouldCoalesceModAmount(now, lastCcSendTime_[(size_t)cc], Oberheim::kModCmdGapMs))
+    if (shouldCoalesceModAmount(now, lastCcSendTime_, Oberheim::kCcSendThrottleMs))
     {
         pendingCcSend_[(size_t)cc] = { true, slot.page, slot.paramCol, scaled };
     }
     else
     {
-        lastCcSendTime_[(size_t)cc] = now;
+        lastCcSendTime_ = now;
         sendParameterToSynth(slot.page, slot.paramCol, scaled, false);
     }
     return true;
